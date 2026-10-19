@@ -1,0 +1,544 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { setImmediate as nextTurn } from 'node:timers/promises';
+import test from 'node:test';
+import vm from 'node:vm';
+
+const html = readFileSync(new URL('../math.html', import.meta.url), 'utf8');
+const configSource = readFileSync(new URL('../browser-tools/config.js', import.meta.url), 'utf8');
+const configResponse = config => new Response(JSON.stringify(config), { headers: { 'Content-Type': 'application/json' } });
+const inlineScripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+  .filter(([, attributes]) => !/\bsrc\s*=/i.test(attributes))
+  .map(([, , source]) => source);
+
+function deferred() {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  return { promise, resolve };
+}
+
+                                                                                
+function createPage({ protocol = 'http:', storageUnavailable = false } = {}) {
+  const elements = new Map();
+  const serviceWorkerListeners = new Map();
+  const ready = deferred();
+  const calls = { registrations: 0, transports: [], sockets: [] };
+
+  function makeElement() {
+    const classes = new Set();
+    return {
+      value: '', innerHTML: '', textContent: '', src: 'about:blank', srcdoc: '', children: [],
+      classList: {
+        add(name) { classes.add(name); },
+        remove(name) { classes.delete(name); },
+        contains(name) { return classes.has(name); }
+      },
+      removeAttribute(name) { this[name] = ''; },
+      setAttribute(name, value) { this[name] = value; },
+      getAttribute(name) { return this[name] || null; },
+      appendChild(child) { this.children.push(child); },
+      getContext() { return null; },
+      addEventListener() {}
+    };
+  }
+
+  function element(id) {
+    if (!elements.has(id)) elements.set(id, makeElement());
+    return elements.get(id);
+  }
+
+  const serviceWorker = {
+    controller: null,
+    ready: ready.promise,
+    async register() { calls.registrations++; },
+    addEventListener(type, callback) { serviceWorkerListeners.set(type, callback); },
+    removeEventListener(type) { serviceWorkerListeners.delete(type); }
+  };
+  const page = {
+    MonkehUseBackendConfig: true,
+    console: { log() {}, warn() {}, error() {} },
+    URL, TextEncoder, TextDecoder, AbortSignal, AbortController, setTimeout, clearTimeout,
+    requestAnimationFrame() {},
+    setInterval() {},
+    localStorage: {
+      getItem() {
+        if (storageUnavailable) throw new Error('Storage disabled');
+        return null;
+      },
+      setItem() {}
+    },
+    navigator: { serviceWorker },
+    document: {
+      activeElement: null,
+      body: { style: { setProperty() {} } },
+      documentElement: { style: { setProperty() {} } },
+      querySelectorAll() { return []; },
+      getElementById: element,
+      createElement: makeElement,
+      createDocumentFragment: makeElement,
+      addEventListener() {}
+    },
+    location: new URL(`${protocol}//localhost:3000/math.html`),
+    isSecureContext: true,
+    SharedWorker: function SharedWorker() {},
+    innerWidth: 100,
+    innerHeight: 100,
+    addEventListener() {},
+    async fetch() { return configResponse({ proxyOrigin: `${protocol}//localhost:3001`, wispEndpoints: [{ name: 'Primary', url: '/wisp/' }] }); },
+    createMonkehNetwork({ endpoints, activate, onStatus }) {
+      let active = null;
+      return {
+        async connect() {
+          if (!active) { await activate(endpoints[0]); active = endpoints[0]; }
+          onStatus({ status: 'connected', activeEndpoint: active, configuredCount: endpoints.length });
+          return active;
+        },
+        async setOnline() {}, dispose() {}
+      };
+    },
+    WebSocket: class {
+      constructor(url) {
+        calls.sockets.push(url);
+        queueMicrotask(() => this.onopen?.());
+      }
+      close() {}
+    },
+    BareMux: {
+      BareMuxConnection: class {
+        async setTransport(path, options) { calls.transports.push({ path, options }); }
+      }
+    }
+  };
+  page.window = page;
+  vm.createContext(page);
+  vm.runInContext(configSource, page, { filename: 'browser-tools/config.js' });
+  for (const source of inlineScripts) vm.runInContext(source, page, { filename: 'math.html' });
+
+  return {
+    page, calls, element,
+    activateWorker() { ready.resolve({ active: {} }); },
+    controlPage() {
+      serviceWorker.controller = {};
+      serviceWorkerListeners.get('controllerchange')?.();
+    }
+  };
+}
+
+test('shell configuration shares concurrent initialization and never creates a shell-origin worker', async () => {
+  const { page, calls } = createPage();
+  const first = page.initializeNetwork();
+  assert.equal(first, page.initializeNetwork());
+  assert.equal(await first, true);
+  assert.equal(page.MonkehProxyOrigin, 'http://localhost:3001');
+  assert.equal(calls.registrations, 0);
+  assert.equal(calls.transports.length, 0);
+});
+
+test('search waits for isolated origin configuration and then navigates the remote host', async () => {
+  const { page, element } = createPage({ protocol: 'https:' });
+  const config = deferred();
+  page.fetch = () => config.promise;
+  const navigation = page.openViewer('Search', 'Web', 'https://example.com/', true);
+  await nextTurn();
+  assert.equal(element('viewer-frame').src, 'about:blank');
+  assert.equal(element('viewer-frame').srcdoc, '', 'opening a page must not insert a full-page loading document');
+  assert.equal(element('viewer-progress').hidden, false);
+  config.resolve(configResponse({ proxyOrigin: 'https://proxy.example.org', wispEndpoints: [{ name: 'Primary', url: '/wisp/' }] }));
+  await navigation;
+  assert.equal(element('viewer-frame').src, 'https://proxy.example.org/proxy-host.html#https%3A%2F%2Fexample.com%2F');
+});
+
+test('preparing a new proxy page leaves the current local app interactive until navigation is ready', async () => {
+  const { page, element } = createPage();
+  const prepared = [];
+  page.MonkehTools = { prepareNavigation: url => prepared.push(url), expectDocument() {} };
+  await page.openViewer('Auk', '', '/apps/auk.html');
+  const response = deferred();
+  page.fetch = () => response.promise;
+  const pending = page.openViewer('Web', '', 'https://example.com/', true);
+  await nextTurn();
+  assert.equal(element('viewer-frame').src, 'http://localhost:3000/apps/auk.html');
+  assert.equal(element('viewer-frame').srcdoc, '');
+  assert.deepEqual(prepared, ['/apps/auk.html'], 'current tools stay attached during preparation');
+  response.resolve(configResponse({ proxyOrigin: 'http://localhost:3001', wispEndpoints: [{ url: '/wisp/' }] }));
+  await pending;
+  assert.equal(element('viewer-frame').src, 'http://localhost:3001/proxy-host.html#https%3A%2F%2Fexample.com%2F');
+  assert.equal(element('viewer-progress').hidden, true);
+});
+
+test('a failed proxy setup for an external catalog entry preserves the current page and offers a retry', async () => {
+  const { page, element } = createPage();
+  const prepared = [];
+  page.MonkehTools = { prepareNavigation: url => prepared.push(url), expectDocument() {} };
+  await page.openViewer('Auk', '', '/apps/auk.html');
+  const request = deferred();
+  page.fetch = () => request.promise;
+  const pending = page.openViewer('Slow game', '', 'https://cdn.example/game.html');
+  assert.equal(element('viewer-frame').src, 'http://localhost:3000/apps/auk.html');
+  request.resolve({ ok: false, status: 504 });
+  await pending;
+  assert.equal(element('viewer-frame').src, 'http://localhost:3000/apps/auk.html');
+  assert.equal(element('viewer-frame').srcdoc, '');
+  assert.deepEqual(prepared, ['/apps/auk.html']);
+  assert.equal(element('viewer-progress').hidden, false);
+  assert.equal(element('viewer-progress-retry').hidden, false);
+  assert.match(element('viewer-progress-text').textContent, /504/);
+});
+
+test('accepted warm proxy navigation preserves the outer iframe and its document', async () => {
+  const { page, element } = createPage();
+  const prepared = [], navigated = [];
+  page.MonkehTools = {
+    prepareNavigation: url => prepared.push(url), expectDocument() {},
+    async navigateRemote(url) { navigated.push(url); return true; },
+  };
+  await page.openViewer('First', 'Web', 'https://first.example/', true);
+  const frame = element('viewer-frame');
+  const originalSource = frame.src;
+  Object.defineProperty(frame, 'src', {
+    get: () => originalSource,
+    set() { throw new Error('Warm navigation must not recreate the outer iframe'); },
+  });
+  await page.openViewer('Next', 'Web', 'https://next.example/path', true);
+  assert.deepEqual(navigated, ['https://next.example/path']);
+  assert.deepEqual(prepared, ['https://first.example/']);
+  assert.equal(frame.src, originalSource);
+  assert.equal(frame.srcdoc, '');
+  assert.equal(element('viewer-title').textContent, 'Next');
+});
+
+test('changing browser identity recreates the proxy view before navigating', async () => {
+  const { page, element } = createPage();
+  let userAgent = 'Monkeh-A/1.0';
+  let reused = 0;
+  page.MonkehPrivacy = { get: () => ({ httpsOnly: true, userAgent }), sandbox: () => 'allow-scripts allow-same-origin allow-forms allow-pointer-lock' };
+  page.MonkehTools = { prepareNavigation() {}, expectDocument() {}, async navigateRemote() { reused++; return true; } };
+  await page.openViewer('First', '', 'https://first.example/', true);
+  assert.equal(new URL(element('viewer-frame').src).searchParams.get('ua'), 'Monkeh-A/1.0');
+  await page.openViewer('Second', '', 'https://second.example/', true);
+  assert.equal(reused, 1);
+  userAgent = 'Monkeh-B/1.0';
+  await page.openViewer('Third', '', 'https://third.example/', true);
+  assert.equal(reused, 1);
+  assert.equal(new URL(element('viewer-frame').src).searchParams.get('ua'), 'Monkeh-B/1.0');
+  userAgent = '';
+  await page.openViewer('Default', '', 'https://default.example/', true);
+  assert.equal(reused, 1);
+  assert.equal(new URL(element('viewer-frame').src).searchParams.has('ua'), false);
+});
+
+test('game code mode survives retry and only reuses a host with the same loading mode', async () => {
+  const { page, element } = createPage();
+  const reused = [];
+  page.MonkehTools = { prepareNavigation() {}, expectDocument() {}, async navigateRemote(url) { reused.push(url); return true; } };
+  await page.openViewer('Web', '', 'https://web.example/', true);
+  await page.openViewer('Game', '', 'https://games.example/first.html', true, { loadCode: true });
+  const host = new URL(element('viewer-frame').src);
+  assert.equal(host.origin, 'http://localhost:3001');
+  assert.equal(host.pathname, '/proxy-host.html');
+  assert.equal(host.searchParams.get('loadCode'), '1');
+  assert.equal(element('viewer-frame').srcdoc, '');
+  assert.deepEqual(reused, []);
+  await page.openViewer('Next game', '', 'https://games.example/second.html', true, { loadCode: true });
+  await page.retryViewerNavigation();
+  assert.deepEqual(reused, ['https://games.example/second.html', 'https://games.example/second.html']);
+  await page.openViewer('Web', '', 'https://web.example/next', true);
+  assert.equal(new URL(element('viewer-frame').src).searchParams.has('loadCode'), false);
+  assert.equal(reused.length, 2);
+});
+
+test('changed popup or download sandbox permissions force a cold proxy navigation', async () => {
+  const { page, element } = createPage();
+  let policy = 'allow-scripts allow-same-origin allow-forms allow-pointer-lock';
+  page.MonkehPrivacy = { get: () => ({ httpsOnly: true }), sandbox: () => policy };
+  const prepared = [];
+  let reused = 0;
+  page.MonkehTools = {
+    prepareNavigation: url => prepared.push(url), expectDocument() {},
+    async navigateRemote() { reused++; return true; },
+  };
+  await page.openViewer('First', '', 'https://first.example/', true);
+  policy += ' allow-downloads';
+  await page.openViewer('Next', '', 'https://next.example/', true);
+  assert.equal(reused, 0);
+  assert.deepEqual(prepared, ['https://first.example/', 'https://next.example/']);
+  assert.equal(element('viewer-frame').sandbox, policy);
+  assert.equal(element('viewer-frame').src, 'http://localhost:3001/proxy-host.html#https%3A%2F%2Fnext.example%2F');
+});
+
+test('stale asynchronous warm reuse cannot replace a newer local app or its retry target', async () => {
+  const { page, element } = createPage();
+  const result = deferred();
+  let attempts = 0;
+  page.MonkehTools = {
+    prepareNavigation() {}, expectDocument() {},
+    navigateRemote() { attempts++; return result.promise; },
+  };
+  await page.openViewer('First', '', 'https://first.example/', true);
+  const stale = page.openViewer('Old destination', '', 'https://old.example/', true);
+  await nextTurn();
+  assert.equal(attempts, 1);
+  await page.openViewer('Auk', '', '/apps/auk.html');
+  result.resolve(false);
+  await stale;
+  assert.equal(element('viewer-frame').src, 'http://localhost:3000/apps/auk.html');
+  assert.equal(element('viewer-frame').srcdoc, '');
+  assert.equal(element('viewer-title').textContent, 'Auk');
+  await page.retryViewerNavigation();
+  assert.equal(element('viewer-frame').src, 'http://localhost:3000/apps/auk.html');
+  assert.equal(attempts, 1);
+});
+
+test('an unavailable warm bridge falls back to a fresh isolated host', async () => {
+  const { page, element } = createPage();
+  let prepared = 0, attempts = 0;
+  page.MonkehTools = {
+    prepareNavigation() { prepared++; }, expectDocument() {},
+    async navigateRemote() { attempts++; return false; },
+  };
+  await page.openViewer('First', '', 'https://first.example/', true);
+  await page.openViewer('Next', '', 'https://next.example/', true);
+  assert.equal(attempts, 1);
+  assert.equal(prepared, 2);
+  assert.equal(element('viewer-frame').src, 'http://localhost:3001/proxy-host.html#https%3A%2F%2Fnext.example%2F');
+});
+
+test('shell refuses a proxy configured on its own origin', async () => {
+  const { page } = createPage();
+  page.fetch = async () => configResponse({ proxyOrigin: 'http://localhost:3000', wispEndpoints: [{ url: '/wisp/' }] });
+  assert.equal(await page.initializeNetwork(), false);
+  assert.equal(page.MonkehProxyOrigin, undefined);
+});
+
+test('HTML from a missing API route shows a deployment error, blocks browsing, and can recover', async () => {
+  const { page, element } = createPage();
+  const workingFetch = page.fetch;
+  page.fetch = async () => new Response('<!DOCTYPE html><html>App fallback</html>', { headers: { 'Content-Type': 'text/html' } });
+  await page.openViewer('Search', 'Web', 'https://example.com/', true);
+  assert.equal(element('viewer-frame').src, 'about:blank');
+  assert.match(element('viewer-frame').srcdoc, /proxy backend is not connected/);
+  assert.match(element('connection-status').innerHTML, /Proxy unavailable/);
+  assert.match(element('network-detail').textContent, /api\/config/);
+  assert.doesNotMatch(element('viewer-frame').srcdoc, /Unexpected token|App fallback/);
+  assert.equal(page.MonkehProxyOrigin, undefined);
+  page.fetch = workingFetch;
+  await page.retryViewerNavigation();
+  assert.equal(element('viewer-frame').src, 'http://localhost:3001/proxy-host.html#https%3A%2F%2Fexample.com%2F');
+  assert.equal(element('viewer-frame').srcdoc, '');
+});
+
+test('closing and reopening the viewer ignores stale proxy setup without aborting shared configuration', async () => {
+  const { page, element } = createPage();
+  const pendingResponse = deferred();
+  let signal;
+  page.fetch = (_url, options) => {
+    signal = options.signal;
+                                                                               
+    return pendingResponse.promise;
+  };
+  const oldNavigation = page.openViewer('Old game', '', 'https://example.com/old.html');
+  page.closeViewer();
+  assert.equal(signal.aborted, false, 'proxy configuration is shared across browser navigation');
+  await page.openViewer('Auk', '', '/apps/auk.html');
+  pendingResponse.resolve(configResponse({ proxyOrigin: 'http://localhost:3001', wispEndpoints: [{ url: '/wisp/' }] }));
+  await oldNavigation;
+
+  assert.equal(element('viewer-frame').src, 'http://localhost:3000/apps/auk.html');
+  assert.equal(element('viewer-frame').srcdoc, '');
+  assert.equal(element('viewer-title').textContent, 'Auk');
+  assert.equal(page.MonkehProxyOrigin, 'http://localhost:3001', 'the shared setup still completes for later navigation');
+  await page.retryViewerNavigation();
+  assert.equal(element('viewer-frame').src, 'http://localhost:3000/apps/auk.html', 'the stale completion does not restore its retry target');
+  assert.equal(element('zone-viewer').classList.contains('active'), true);
+});
+
+test('concurrent external catalog navigation shares configuration and only the latest destination opens', async () => {
+  const { page, element } = createPage();
+  const response = deferred();
+  let requests = 0;
+  page.fetch = () => { requests++; return response.promise; };
+  const first = page.openViewer('First', '', 'https://first.example/game.html', false);
+  const latest = page.openViewer('Latest', '', 'https://latest.example/game.html', false);
+  response.resolve(configResponse({ proxyOrigin: 'http://localhost:3001', wispEndpoints: [{ url: '/wisp/' }] }));
+  await Promise.all([first, latest]);
+  assert.equal(requests, 1);
+  assert.equal(element('viewer-frame').src, 'http://localhost:3001/proxy-host.html#https%3A%2F%2Flatest.example%2Fgame.html');
+  assert.equal(element('viewer-frame').srcdoc, '');
+  assert.equal(element('viewer-title').textContent, 'Latest');
+});
+
+test('local viewer keeps the app URL so its relative assets resolve correctly', async () => {
+  const { page, element } = createPage();
+  page.fetch = () => { throw new Error('Local apps should use native iframe navigation'); };
+  await page.openViewer('Auk', '', '/apps/auk.html');
+  assert.equal(element('viewer-frame').src, 'http://localhost:3000/apps/auk.html');
+  assert.equal(element('viewer-frame').srcdoc, '');
+});
+
+test('search distinguishes addresses from phrases and normalizes uppercase protocols', () => {
+  const { page } = createPage();
+  for (const [query, expected] of [
+    ['HTTPS://EXAMPLE.COM/a?b=2#c', 'https://example.com/a?b=2#c'],
+    ['example.com', 'https://example.com/'],
+    ['localhost:8080/a', 'https://localhost:8080/a'],
+    ['http://[::1]:8080/path', 'http://[::1]:8080/path'],
+    ['  two words  ', 'https://duckduckgo.com/?q=two%20words'],
+    ['javascript:alert(1)', 'https://duckduckgo.com/?q=javascript%3Aalert(1)']
+  ]) assert.equal(page.getSearchUrl(query), expected);
+});
+
+test('viewer rejects script URLs and reports the error as text', async () => {
+  const { page, element } = createPage();
+  await page.openViewer('Invalid entry', '', 'javascript:alert(1)');
+  assert.equal(element('viewer-frame').src, 'about:blank');
+  assert.match(element('viewer-frame').srcdoc, /Only HTTP and HTTPS/);
+});
+
+test('blocked settings storage does not disable search or local apps', async () => {
+  const { page, element } = createPage({ storageUnavailable: true });
+  assert.equal(page.getSearchUrl('example.com'), 'https://example.com/');
+  await page.openViewer('Auk', '', '/apps/auk.html');
+  assert.equal(element('viewer-frame').src, 'http://localhost:3000/apps/auk.html');
+});
+
+test('Auk is available from the local catalog before remote requests complete', async () => {
+  const { page } = createPage();
+  const remoteCatalog = deferred();
+  page.fetch = () => remoteCatalog.promise;
+  page.openAppsPopover();
+  assert.ok(page.rawApps.some(app => app.name === 'Auk' && app.url === '/apps/auk.html'));
+  remoteCatalog.resolve({ ok: true, text: async () => '[]' });
+  await nextTurn();
+  assert.equal(page.appsLoaded, true);
+});
+
+test('catalog input is bounded and malformed records are ignored', () => {
+  const { page } = createPage();
+  assert.equal(page.catalogEntries('invalid').length, 0);
+  assert.equal(page.catalogEntries([null, [], 'bad', { name: 'x'.repeat(1000) }]).length, 1);
+  assert.equal(page.catalogEntries([{ name: 'x'.repeat(1000) }])[0].name.length, 200);
+  assert.equal(page.catalogEntries(Array.from({ length: 10001 }, () => ({}))).length, 10000);
+});
+
+test('remote downloads enforce declared and streamed size limits and cancel oversized streams', async () => {
+  const { page } = createPage();
+  await assert.rejects(page.readResponseText({ headers: { get: () => '1000' } }, 100), /size limit/);
+  let cancelled = false;
+  let released = false;
+  const response = { body: { getReader: () => ({
+    read: async () => ({ done: false, value: new Uint8Array(101) }),
+    cancel: async () => { cancelled = true; }, releaseLock() { released = true; }
+  }) } };
+  await assert.rejects(page.readResponseText(response, 100), /size limit/);
+  assert.equal(cancelled, true);
+  assert.equal(released, true);
+});
+
+test('viewer rejects untrusted local navigation and credential-bearing URLs', async () => {
+  const { page, element } = createPage();
+  await page.openViewer('Invalid', '', '/math.html');
+  assert.match(element('viewer-frame').srcdoc, /trusted app list/);
+  await page.openViewer('Invalid', '', 'https://user:password@example.com/');
+  assert.match(element('viewer-frame').srcdoc, /login details/);
+  await page.openViewer('Invalid', '', 'http://localhost:3000/math.html', true);
+  assert.match(element('viewer-frame').srcdoc, /App pages cannot be opened/);
+});
+
+test('Mochii Cloud is available offline from the app catalog and opens as a local app', async () => {
+  const { page, element } = createPage({ storageUnavailable: true });
+  const remoteCatalog = deferred();
+  page.fetch = () => remoteCatalog.promise;
+  page.openAppsPopover();
+  assert.ok(page.rawApps.some(app => app.name === 'Mochii Cloud' && app.url === '/apps/mochii-cloud.html'));
+  await page.openViewer('Mochii Cloud', '', '/apps/mochii-cloud.html');
+  assert.equal(element('viewer-frame').src, 'http://localhost:3000/apps/mochii-cloud.html');
+  assert.equal(element('viewer-frame').sandbox, '');
+  remoteCatalog.resolve({ ok: true, text: async () => '[]' });
+  await nextTurn();
+});
+
+test('external catalog entries always use the isolated proxy even with isProxied false', async () => {
+  const { page, element } = createPage();
+  const requests = [];
+  const configFetch = page.fetch;
+  page.fetch = (...args) => { requests.push(args[0]); return configFetch(...args); };
+  page.MonkehPrivacy = { get: () => ({ httpsOnly: false }), sandbox: () => 'allow-scripts allow-same-origin allow-forms allow-pointer-lock' };
+  const frame = element('viewer-frame');
+  for (const url of ['https://cdn.example/game.html', 'http://legacy.example/game.html']) {
+    await page.openViewer('Game', '', url, false);
+    assert.equal(frame.src, 'http://localhost:3001/proxy-host.html#' + encodeURIComponent(url));
+    assert.equal(frame.srcdoc, '');
+    assert.match(frame.sandbox, /allow-scripts/);
+    assert.match(frame.sandbox, /allow-same-origin/);
+    assert.doesNotMatch(frame.sandbox, /allow-top-navigation|allow-popups/);
+  }
+  assert.deepEqual(requests, ['/api/config'], 'catalog HTML is never downloaded into a shell srcdoc');
+  for (const app of ['/apps/auk.html', '/apps/mochii-cloud.html']) {
+    await page.openViewer('Local app', '', app);
+    assert.equal(frame.src, 'http://localhost:3000' + app);
+    assert.equal(frame.srcdoc, '');
+    assert.equal(frame.sandbox, '');
+  }
+});
+
+test('retry reopens the external catalog address through the proxy and closing clears the target', async () => {
+  const { page, element } = createPage();
+  const requests = [];
+  const configFetch = page.fetch;
+  page.fetch = (...args) => { requests.push(args[0]); return configFetch(...args); };
+  const destinations = [];
+  const frame = element('viewer-frame');
+  Object.defineProperty(frame, 'src', { get: () => destinations.at(-1) || 'about:blank', set: value => destinations.push(value) });
+  await page.openViewer('Game', 'Author', 'https://cdn.example/game.html');
+  await page.retryViewerNavigation();
+  const expected = 'http://localhost:3001/proxy-host.html#https%3A%2F%2Fcdn.example%2Fgame.html';
+  assert.deepEqual(destinations, [expected, expected]);
+  assert.deepEqual(requests, ['/api/config']);
+  assert.equal(frame.srcdoc, '');
+  assert.match(frame.sandbox, /allow-same-origin/);
+  assert.doesNotMatch(frame.sandbox, /allow-top-navigation/);
+  assert.equal(element('viewer-title').textContent, 'Game');
+  assert.equal(element('viewer-author').textContent, 'by Author');
+  page.closeViewer();
+  const closedCount = destinations.length;
+  await page.retryViewerNavigation();
+  assert.equal(destinations.length, closedCount, 'closing clears the saved retry target');
+  assert.equal(frame.src, 'about:blank');
+  assert.equal(element('zone-viewer').classList.contains('active'), false);
+});
+
+test('Flyflix catalog launches the live website through the same proxy viewer', async () => {
+  const { page, element } = createPage();
+  const configFetch = page.fetch;
+  page.fetch = (url, ...args) => url === '/api/config' ? configFetch(url, ...args) : Promise.resolve({ ok: true, text: async () => '[]' });
+  page.openAppsPopover();
+  const app = page.rawApps.find(entry => entry.name === 'Flyflix');
+  assert.equal(app.url, 'https://flyflix.net/');
+  await page.openViewer(app.name, app.author, app.url);
+  assert.equal(element('viewer-frame').src, 'http://localhost:3001/proxy-host.html#https%3A%2F%2Fflyflix.net%2F');
+  assert.equal(element('viewer-frame').srcdoc, '');
+});
+
+
+test('static mirrors open their local proxy host and retain the local service worker', async () => {
+  const { page, calls, element } = createPage({ protocol: 'https:' });
+  page.MonkehUseBackendConfig = false;
+  let unregisters = 0;
+  page.navigator.serviceWorker.getRegistrations = async () => [{ active: { scriptURL: page.location.origin + '/sw.js' }, async unregister() { unregisters++; } }];
+  page.fetch = async () => { throw new Error('Static configuration must not request an API'); };
+  await page.openViewer('Search', 'Web', 'https://example.com/', true);
+  assert.equal(page.MonkehProxyOrigin, page.location.origin);
+  assert.equal(element('viewer-frame').src, page.location.origin + '/proxy-host.html#https%3A%2F%2Fexample.com%2F');
+  assert.equal(unregisters, 0);
+  assert.equal(calls.registrations, 0);
+  assert.equal(element('proxy-auth-link').hidden, true);
+});
+
+test('network status distinguishes local proxy software failures from unreachable servers', () => {
+  const { page, element } = createPage();
+  page.networkStatusChanged({ status: 'unavailable', failureStage: 'transport', configuredCount: 2 });
+  assert.match(element('network-detail').textContent, /Proxy software could not start/);
+  assert.doesNotMatch(element('network-detail').textContent, /servers unavailable/);
+  page.networkStatusChanged({ status: 'unavailable', failureStage: 'probe', configuredCount: 2 });
+  assert.match(element('network-detail').textContent, /Proxy servers unavailable/);
+});

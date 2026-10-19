@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mochii</title>
+                                                          
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+                                        
+  
+                                    
+                     
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="/browser-tools/tools.css" />
+  <style>
+    .viewer-body { position: relative; }
+    .viewer-progress { position: absolute; bottom: 12px; left: 12px; z-index: 2; display: flex; align-items: center; gap: 10px; max-width: min(520px, calc(100% - 48px)); padding: 10px 12px; border: 1px solid #514765; border-radius: 10px; background: #19171ff0; color: #d3ccdf; font-size: 12px; line-height: 1.5; pointer-events: none; }
+    .viewer-progress[hidden] { display: none; }
+    .viewer-progress span { overflow-wrap: anywhere; }
+    .viewer-progress button { pointer-events: auto; flex-shrink: 0; }
+  </style>
+  <script src="/browser-tools/config.js"></script>
+  <script src="/browser-tools/shell-entry.js"></script>
+  <script type="module" src="/browser-tools/preferences.js"></script>
+  <script type="module" src="/browser-tools/game-catalog.js"></script>
+  <script type="module" src="/browser-tools/particles.js"></script>
+  <link rel="stylesheet" href="/browser-tools/particles.css">
+  <link rel="stylesheet" href="/browser-tools/preferences.css">
+  <link rel="stylesheet" href="/browser-tools/game-catalog.css">
+  <link rel="stylesheet" href="/browser-tools/music-catalog.css">
+  <script type="module" src="/browser-tools/tools.js"></script>
+  <script type="module" src="/browser-tools/ai-help.js"></script>
+</head>
+<body>
+  <div class="app-viewport">
+                                         
+    <nav class="floating-nav">
+      <button class="nav-icon" title="Games" onclick="openGamesPopover()">
+        <span class="material-symbols-outlined">sports_esports</span>
+      </button>
+      <button class="nav-icon" title="Apps & Sites" onclick="openAppsPopover()">
+        <span class="material-symbols-outlined">desktop_windows</span>
+      </button>
+      <button class="nav-icon" title="Music" aria-label="Music" onclick="openMusicPopover(this)">
+        <span class="material-symbols-outlined">music_note</span>
+      </button>
+      <button class="nav-icon" title="Settings" onclick="openSettingsModal()">
+        <span class="material-symbols-outlined">settings</span>
+      </button>
+    </nav>
+                              
+    <main class="main-container">
+      <div class="hero-content">
+        <h1 class="title">mochii</h1>
+        <div class="search-container">
+          <input 
+            type="text" 
+            class="search-input" 
+            id="hero-search" 
+            placeholder="Search anything... (Press '/' to focus)" 
+            autocomplete="off"
+          />
+          <span class="material-symbols-outlined search-icon">search</span>
+        </div>
+        <div class="status-badge" id="connection-status" role="status" aria-live="polite">
+          <span class="status-indicator" style="background: orange;"></span>
+          <span>Connecting to network...</span>
+        </div>
+      </div>
+    </main>
+  </div>
+                              
+  <div class="overlay-backdrop" id="games-popover">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Games Catalog</h2>
+        <button class="close-btn" onclick="closeGamesPopover()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="controls-row">
+        <input 
+          type="text" 
+          class="modal-search-box" 
+          id="popover-search-input" 
+          placeholder="Search catalog..." 
+          oninput="window.renderGames && window.renderGames()"
+        />
+        <select class="modal-sort-select" id="popover-sort-select" onchange="window.renderGames && window.renderGames()">
+          <option value="pop">Featured</option>
+          <option value="az">Name (A-Z)</option>
+          <option value="za">Name (Z-A)</option>
+        </select>
+      </div>
+      <div class="popover-content" id="game-list">
+        <div class="loading-text">Loading catalog...</div>
+      </div>
+    </div>
+  </div>
+                             
+  <div class="overlay-backdrop" id="apps-popover">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Apps & Sites</h2>
+        <button class="close-btn" onclick="closeAppsPopover()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="controls-row">
+        <input 
+          type="text" 
+          class="modal-search-box" 
+          id="apps-search-input" 
+          placeholder="Search apps..." 
+          oninput="window.renderApps && window.renderApps()"
+        />
+        <select class="modal-sort-select" id="apps-sort-select" onchange="window.renderApps && window.renderApps()">
+          <option value="pop">Popularity</option>
+          <option value="az">Name (A-Z)</option>
+          <option value="za">Name (Z-A)</option>
+        </select>
+      </div>
+      <div class="popover-content" id="apps-list">
+        <div class="loading-text">Loading catalog...</div>
+      </div>
+    </div>
+  </div>
+                                 
+  <div class="overlay-backdrop" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-heading">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title" id="settings-heading">Settings</h2>
+        <button class="close-btn" onclick="closeSettingsModal()" aria-label="Close settings">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="settings-body">
+        <div id="general-preferences"></div>
+        <div class="setting-item" id="proxy-network-setting">
+          <div class="setting-info">
+            <span class="setting-title">Proxy network</span>
+            <span class="setting-desc" id="network-detail">Checking available servers…</span>
+            <a id="proxy-auth-link" class="setting-desc" target="_blank" rel="noopener noreferrer" hidden>Sign in to the proxy connection</a>
+          </div>
+          <button type="button" class="viewer-btn" onclick="retryProxyNetwork()">Reconnect</button>
+        </div>
+        <label class="setting-item"><span class="setting-info"><span class="setting-title">Search engine</span><span class="setting-desc">Used when you enter a search instead of an address.</span></span><select data-privacy="searchEngine" aria-label="Search engine"><option value="duckduckgo">DuckDuckGo</option><option value="brave">Brave</option><option value="google">Google</option></select></label>
+        <label class="setting-item"><span class="setting-info"><span class="setting-title">Require HTTPS for entered addresses</span><span class="setting-desc">Blocks opening an HTTP address from the search and address bars. Links within pages may still use HTTP.</span></span><input type="checkbox" data-privacy="httpsOnly"></label>
+        <label class="setting-item"><span class="setting-info"><span class="setting-title">Allow popups</span><span class="setting-desc">Let viewed websites open new windows. Off by default.</span></span><input type="checkbox" data-privacy="allowPopups"></label>
+        <label class="setting-item"><span class="setting-info"><span class="setting-title">Allow downloads</span><span class="setting-desc">Let viewed websites initiate file downloads.</span></span><input type="checkbox" data-privacy="allowDownloads"></label>
+        <label class="setting-item"><span class="setting-info"><span class="setting-title">Clear console when closing the browser</span><span class="setting-desc">Removes captured logs and command history from this workspace.</span></span><input type="checkbox" data-privacy="clearConsoleOnClose"></label>
+        <label class="setting-item"><span class="setting-info"><span class="setting-title">Show catalog images</span><span class="setting-desc">Load cover images from catalog providers when you open Games or Apps.</span></span><input type="checkbox" data-privacy="showCovers"></label>
+        <label class="setting-item"><span class="setting-info"><span class="setting-title">AI coding help</span><span class="setting-desc">Cloudflare receives only the question and code you choose to send in Tools → Help.</span></span><input type="checkbox" data-privacy="aiEnabled"></label>
+        <p class="setting-desc" id="privacy-status" role="status">Preferences stay in this browser. Public proxy operators handle your traffic; these settings do not make browsing anonymous.</p>
+      </div>
+    </div>
+  </div>
+                                          
+  <div class="viewer-overlay" id="zone-viewer">
+    <div class="viewer-header">
+      <div class="viewer-info">
+        <span class="viewer-title" id="viewer-title">Title</span>
+        <span class="viewer-author" id="viewer-author">Author</span>
+      </div>
+      <div class="viewer-actions">
+        <button class="viewer-btn" id="browser-tools-toggle" type="button" aria-expanded="false" aria-controls="browser-tools"><span class="material-symbols-outlined" aria-hidden="true">terminal</span> Tools</button>
+        <button class="viewer-btn" onclick="toggleViewerFullscreen()">Fullscreen</button>
+        <button class="viewer-btn viewer-close-btn" onclick="closeViewer()">Close</button>
+      </div>
+    </div>
+    <div class="browser-toolbar">
+      <button type="button" id="browser-reload" class="bt-icon-button" aria-label="Reload viewed page" title="Reload page"><span class="material-symbols-outlined" aria-hidden="true">refresh</span></button>
+      <button type="button" id="browser-switch-server" class="bt-icon-button" aria-label="Switch proxy server without reloading" title="Switch proxy server without reloading the page" disabled><span class="material-symbols-outlined" aria-hidden="true">swap_horiz</span></button>
+      <form id="browser-address" autocomplete="off">
+        <span class="material-symbols-outlined" aria-hidden="true">language</span>
+        <input id="browser-url" aria-label="Browser address" placeholder="Enter a URL or search" spellcheck="false" />
+        <button type="submit" class="bt-icon-button" aria-label="Navigate to address"><span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></button>
+      </form>
+    </div>
+    <div id="network-notice" class="network-notice" role="status" hidden><span id="network-notice-text"></span><button type="button" onclick="document.getElementById('browser-reload').click()">Reload page</button><button type="button" aria-label="Dismiss network notice" onclick="this.parentElement.hidden = true">×</button></div>
+    <div class="viewer-body">
+      <iframe class="viewer-frame" id="viewer-frame" title="Game or app viewer" referrerpolicy="no-referrer" src="about:blank" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>
+      <div id="viewer-progress" class="viewer-progress" role="status" hidden><span id="viewer-progress-text"></span><button id="viewer-progress-retry" class="viewer-btn" type="button" onclick="retryViewerNavigation()" hidden>Retry</button><button class="viewer-btn" type="button" aria-label="Dismiss page status" onclick="this.parentElement.hidden = true">×</button></div>
+    </div>
+      <aside id="browser-tools" class="browser-tools" aria-label="Browser developer tools" hidden>
+    <div id="tools-resize" class="bt-resize" role="separator" aria-label="Resize browser tools" aria-orientation="vertical" aria-valuemin="280" aria-valuemax="900" aria-valuenow="420" tabindex="0"><span></span></div>
+    <header class="bt-header">
+      <div class="bt-heading">
+        <span class="bt-brand-icon" aria-hidden="true">&lt;/&gt;</span>
+        <h2>Browser tools</h2>
+        <span class="bt-header-divider" aria-hidden="true"></span>
+        <span id="tools-target" class="bt-target">Current page</span>
+      </div>
+      <div class="bt-header-actions">
+        <span id="tools-connection" class="bt-connection" role="status">Connecting</span>
+        <button id="tools-close" class="bt-icon-button" type="button" title="Close browser tools" aria-label="Close browser tools"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button>
+      </div>
+    </header>
+    <div class="bt-tabs" role="tablist" aria-label="Browser tool">
+      <button id="tab-console" class="bt-tab" type="button" role="tab" data-tool-tab="console" aria-selected="true" aria-controls="tool-console"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 5 5 5-5 5M11 15h5"/></svg>Console</button>
+      <button id="tab-inspector" class="bt-tab" type="button" role="tab" data-tool-tab="inspector" aria-selected="false" aria-controls="tool-inspector" tabindex="-1"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M7 3H3v4m10-4h4v4M3 13v4h4m10-4v4h-4M8 8l7 3-3 1-1 3Z"/></svg>Inspect</button>
+      <button id="tab-scripts" class="bt-tab" type="button" role="tab" data-tool-tab="scripts" aria-selected="false" aria-controls="tool-scripts" tabindex="-1"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 5-4 5 4 5m8-10 4 5-4 5m-3-12-2 14"/></svg>Userscripts</button>
+      <button id="tab-help" class="bt-tab" type="button" role="tab" data-tool-tab="help" aria-selected="false" aria-controls="tool-help" tabindex="-1">Help</button>
+    </div>
+    <section id="tool-console" class="bt-panel bt-console" role="tabpanel" aria-labelledby="tab-console">
+      <div class="bt-toolbar">
+        <label class="bt-search-field"><svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5"/><path d="m12 12 4.5 4.5"/></svg><span class="bt-sr-only">Filter console messages</span><input id="console-filter" type="search" placeholder="Filter messages" autocomplete="off"></label>
+        <label class="bt-inline-field"><span class="bt-sr-only">Message level</span><select id="console-level"><option value="all">All levels</option><option value="log">Logs</option><option value="warn">Warnings</option><option value="error">Errors</option></select></label>
+        <label class="bt-check"><input id="console-preserve" type="checkbox">Preserve log</label>
+        <button id="console-clear" class="bt-button bt-button-quiet bt-push-right" type="button" title="Clear console messages">Clear</button>
+      </div>
+      <div id="console-output" class="bt-console-output" role="log" aria-label="Console messages" aria-live="polite" aria-relevant="additions" tabindex="0"></div>
+      <form id="console-form" class="bt-console-form">
+        <span class="bt-prompt" aria-hidden="true">&gt;</span>
+        <label class="bt-sr-only" for="console-input">JavaScript expression</label>
+        <textarea id="console-input" class="bt-console-input" rows="2" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="Run JavaScript in this page…"></textarea>
+        <div class="bt-console-submit"><button class="bt-button bt-button-accent" type="submit">Run <span aria-hidden="true">↵</span></button><span class="bt-shortcut">Ctrl + Enter</span></div>
+      </form>
+    </section>
+    <section id="tool-inspector" class="bt-panel bt-inspector" role="tabpanel" aria-labelledby="tab-inspector" hidden>
+      <div class="bt-toolbar">
+        <button id="inspector-pick" class="bt-button" type="button" aria-pressed="false"><svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M7 3H3v4m10-4h4v4M3 13v4h4m10-4v4h-4M8 8l7 3-3 1-1 3Z"/></svg>Pick element</button>
+        <button id="inspector-refresh" class="bt-button bt-button-quiet" type="button" title="Refresh page elements">Refresh</button>
+        <form id="inspector-selector" class="bt-selector-form"><label class="bt-sr-only" for="inspector-query">Find element by CSS selector</label><input id="inspector-query" class="bt-input bt-code" type="text" placeholder="CSS selector, e.g. #main" autocomplete="off" spellcheck="false"><button id="inspector-find" class="bt-button" type="submit">Find</button></form>
+      </div>
+      <div class="bt-inspector-workspace">
+        <div class="bt-dom-pane"><div class="bt-pane-label">PAGE ELEMENTS</div><div id="inspector-tree" class="bt-tree" role="tree" aria-label="Page elements" tabindex="0"></div></div>
+        <div id="inspector-details" class="bt-inspector-details">
+          <div class="bt-pane-label">SELECTED ELEMENT</div>
+          <div id="inspector-summary" class="bt-element-summary bt-code">Select an element to inspect it.</div>
+          <div class="bt-detail-section"><h3>Attributes</h3><div id="inspector-attributes" class="bt-properties"></div></div>
+          <form id="inspector-attribute-form" class="bt-style-form">
+            <h3>Edit attribute</h3><div class="bt-style-inputs"><label><span>Name</span><input id="inspector-attribute-name" class="bt-input bt-code" maxlength="128" placeholder="title" required></label><label><span>Value</span><input id="inspector-attribute-value" class="bt-input bt-code" maxlength="10000"></label></div>
+            <div class="bt-script-actions"><button id="inspector-attribute-apply" class="bt-button" type="submit" disabled>Set attribute</button><button id="inspector-attribute-remove" class="bt-button" type="button" disabled>Remove attribute</button></div>
+          </form>
+          <form id="inspector-text-form" class="bt-style-form">
+            <h3>Edit text</h3><label class="bt-sr-only" for="inspector-text">Element text</label><textarea id="inspector-text" class="bt-input bt-code" rows="4" maxlength="10000"></textarea><p class="bt-help">Replacing text also removes nested elements. Use Undo edit to restore them.</p><button id="inspector-text-apply" class="bt-button" type="submit" disabled>Replace text</button>
+          </form>
+          <div class="bt-script-actions"><button id="inspector-delete" class="bt-button bt-button-danger" type="button" disabled>Delete element</button><button id="inspector-undo" class="bt-button" type="button" disabled>Undo edit</button></div><p id="inspector-edit-status" class="bt-help" role="status">Edits last until this page reloads.</p>
+          <div class="bt-detail-section"><h3>Computed styles</h3><div id="inspector-styles" class="bt-properties"></div></div>
+          <form id="inspector-style-form" class="bt-style-form">
+            <h3>Edit inline style</h3>
+            <div class="bt-style-inputs"><label><span>Property</span><input id="inspector-property" class="bt-input bt-code" type="text" placeholder="color" spellcheck="false" autocomplete="off" required></label><label><span>Value</span><input id="inspector-value" class="bt-input bt-code" type="text" placeholder="#c4b5fd" spellcheck="false" autocomplete="off"></label><button class="bt-button bt-button-accent" type="submit">Apply</button></div>
+            <p class="bt-help">Changes apply to this page until it reloads. Leave the value blank to remove an inline property.</p>
+          </form>
+        </div>
+      </div>
+    </section>
+    <section id="tool-scripts" class="bt-panel bt-scripts" role="tabpanel" aria-labelledby="tab-scripts" hidden>
+      <div class="bt-scripts-sidebar"><div class="bt-scripts-sidebar-heading"><span class="bt-pane-label">YOUR SCRIPTS</span><button id="userscript-new" class="bt-button bt-button-quiet" type="button"><span aria-hidden="true">+</span> New</button></div><div id="userscript-list" class="bt-script-list" aria-label="Saved userscripts"></div><p class="bt-sidebar-note">Saved in this browser.<br>Ready whenever you are.</p></div>
+      <div class="bt-script-editor">
+        <div class="bt-script-fields"><label class="bt-name-field"><span>Script name</span><input id="userscript-name" class="bt-input" type="text" placeholder="My page enhancement" maxlength="100" autocomplete="off"></label><label class="bt-match-field"><span>Run on <span class="bt-field-optional">URL patterns</span></span><input id="userscript-match" class="bt-input bt-code" type="text" placeholder="https://example.com/*" autocomplete="off" spellcheck="false"></label><label class="bt-check bt-auto-run"><input id="userscript-enabled" type="checkbox" disabled title="Stored preference retained; automatic execution is paused.">Auto-run paused</label></div>
+        <div class="bt-editor-chrome"><label for="userscript-code">JavaScript</label><span>Plain JavaScript · no GM APIs</span></div>
+        <textarea id="userscript-code" class="bt-code-editor" aria-describedby="userscript-help" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="// Make this page your own&#10;console.log('Hello from your userscript!');"></textarea>
+        <div class="bt-script-footer"><div class="bt-script-feedback"><p id="userscript-status" class="bt-script-status" role="status" aria-live="polite">Create a script or open one from your library.</p><p id="userscript-help" class="bt-help">Separate URL patterns with commas. Use * as a wildcard. Use Run now to execute your draft; automatic execution is paused on remote pages.</p></div><div class="bt-script-actions"><button id="userscript-delete" class="bt-button bt-button-danger" type="button">Delete</button><button id="userscript-run" class="bt-button" type="button">Run now</button><button id="userscript-save" class="bt-button bt-button-accent" type="button">Save script</button></div></div>
+      </div>
+    </section>
+    <section id="tool-help" class="bt-panel bt-ai-panel" role="tabpanel" aria-labelledby="tab-help" hidden>
+      <form id="ai-help-form" class="bt-ai-form">
+        <p class="bt-ai-notice">Ask about JavaScript, CSS, or a userscript. Only the text below is sent to Cloudflare Workers AI when you press Ask. Free usage is limited; no account is needed here.</p>
+        <label for="ai-question">Question</label><textarea id="ai-question" class="bt-input" rows="3" maxlength="2000" required placeholder="How can I change this page's heading?"></textarea>
+        <div class="bt-script-actions"><label for="ai-code">Code <span class="bt-field-optional">optional</span></label><button id="ai-use-draft" class="bt-button" type="button">Use userscript draft</button></div>
+        <textarea id="ai-code" class="bt-input bt-code" rows="8" maxlength="6000" spellcheck="false" placeholder="Paste code to review. Remove passwords, tokens, and private information first."></textarea>
+        <div class="bt-script-actions"><button id="ai-submit" class="bt-button bt-button-accent" type="submit">Ask</button><button id="ai-cancel" class="bt-button" type="button" hidden>Cancel</button><button id="ai-clear" class="bt-button" type="button">Clear</button></div>
+        <p id="ai-status" class="bt-help" role="status">Answers stay here until cleared or this tab reloads. Suggestions never run automatically.</p>
+        <pre id="ai-output" class="bt-ai-output" aria-label="Coding help response" tabindex="0"></pre>
+      </form>
+    </section>
+  </aside>
+  </div>
+                                
+  <script>
+                                                                
+                                      
+                                                                   
+    let networkPromise = null;
+    let networkErrorMessage = '';
+    let endpointNames = new Map();
+    let lastEndpoint = null;
+    let viewerIsProxied = false;
+    function networkStatusChanged(state) {
+      const name = endpointNames.get(state.activeEndpoint) || 'Proxy';
+      const messages = {
+        connected: `${name} connected`, connecting: 'Finding an available server…',
+        degraded: 'Checking proxy connection…', offline: 'Your device is offline',
+        unavailable: state.failureStage === 'transport' ? 'Proxy software could not start — retrying' : 'Proxy servers unavailable — retrying', idle: 'Proxy ready to connect'
+      };
+      updateStatus(messages[state.status] || 'Proxy paused', state.status === 'connected' ? '#22c55e' : '#f59e0b');
+      const detail = document.getElementById('network-detail');
+      if (detail) detail.textContent = `${messages[state.status] || 'Paused'} · ${state.configuredCount} configured server${state.configuredCount === 1 ? '' : 's'}`;
+      if (state.activeEndpoint && state.status === 'connected') {
+        if (lastEndpoint && lastEndpoint !== state.activeEndpoint && viewerIsProxied) {
+          document.getElementById('network-notice-text').textContent = `Switched to ${name}. Reload if this page stopped responding.`;
+          document.getElementById('network-notice').hidden = false;
+        }
+        lastEndpoint = state.activeEndpoint;
+      }
+    }
+    function retryProxyNetwork() {
+      if (viewerIsProxied) return window.MonkehTools?.reconnect?.();
+      window.MonkehProxyOrigin = null;
+      return initializeNetwork();
+    }
+    function initializeNetwork() {
+      if (networkPromise) return networkPromise;
+      if (window.MonkehProxyOrigin) return Promise.resolve(true);
+      networkErrorMessage = '';
+      updateStatus('Checking browser configuration…', '#f59e0b');
+      networkPromise = (async () => {
+        const config = await globalThis.MonkehConfig.fetchConfig();
+        if (!Array.isArray(config.wispEndpoints) || !config.wispEndpoints.length || config.wispEndpoints.length > 32) throw new Error('Invalid proxy server configuration.');
+        const localProxy = config.mode === 'static';
+        const configuredOrigin = localProxy ? location.origin : config.proxyOrigin;
+        const origin = new URL(configuredOrigin);
+        if (origin.origin !== configuredOrigin || (!localProxy && origin.origin === location.origin) || origin.username || origin.password || !['http:', 'https:'].includes(origin.protocol)) throw new Error('The proxy must use a separate browser origin.');
+        if (location.protocol === 'https:' && origin.protocol !== 'https:') throw new Error('The proxy requires HTTPS.');
+        for (const entry of config.wispEndpoints) {
+          const url = new URL(entry.url, origin);
+          if (url.protocol === 'http:') url.protocol = 'ws:';
+          if (url.protocol === 'https:') url.protocol = 'wss:';
+          endpointNames.set(url.href, String(entry.name || 'Proxy').slice(0, 80));
+        }
+        window.MonkehProxyOrigin = origin.origin;
+        const authLink = document.getElementById('proxy-auth-link');
+        authLink.href = origin.origin + '/api/health';
+        authLink.hidden = !config.requiresAuthentication;
+                                                                              
+        if (!localProxy && navigator.serviceWorker?.getRegistrations) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (const registration of registrations) {
+            if (registration.active?.scriptURL === location.origin + '/sw.js') await registration.unregister();
+          }
+        }
+        updateStatus('Browser ready', '#22c55e');
+        document.getElementById('network-detail').textContent = `${config.wispEndpoints.length} configured server${config.wispEndpoints.length === 1 ? '' : 's'} · connects when you open a page`;
+        return true;
+      })().catch(error => {
+        networkErrorMessage = error.message || 'Browser configuration failed. Try again.';
+        updateStatus('Proxy unavailable', '#ef4444');
+        document.getElementById('network-detail').textContent = networkErrorMessage;
+        return false;
+      }).finally(() => { networkPromise = null; });
+      return networkPromise;
+    }
+    function updateStatus(text, color) {
+      const statusBadge = document.getElementById("connection-status");
+      if (!statusBadge) {
+        return;
+      }
+      statusBadge.innerHTML = `
+        <span
+          class="status-indicator"
+          style="background-color: ${color};"
+        ></span>
+        <span>${escapeHtml(text)}</span>
+      `;
+    }
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+                                                                
+                                              
+                                                                   
+    function getSearchUrl(query) {
+      const trimmed = query.trim();
+      const hasProtocol = /^https?:\/\//i.test(trimmed);
+      try {
+        const url = new URL(hasProtocol ? trimmed : 'https://' + trimmed);
+        if (!/\s/.test(trimmed) && /^https?:$/.test(url.protocol) &&
+            (hasProtocol || url.hostname.includes('.') || url.hostname === 'localhost')) {
+          return url.href;
+        }
+      } catch (_) {
+                                                             
+      }
+      return window.MonkehPrivacy?.search(trimmed) || 'https://duckduckgo.com/?q=' + encodeURIComponent(trimmed);
+    }
+    function handleHeroSearch(query) {
+      if (!query.trim()) return;
+      if (query.length > 4096) { updateStatus('The address is too long.', '#ef4444'); return; }
+      const targetUrl = getSearchUrl(query);
+      const parsed = new URL(targetUrl);
+      if (parsed.username || parsed.password) { updateStatus('Enter an address without embedded login details.', '#ef4444'); return; }
+      openViewer('Search', 'Web', targetUrl, true);
+    }
+    window.addEventListener('keydown', (e) => {
+      const activeElement = document.activeElement;
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey &&
+          !activeElement?.isContentEditable && !activeElement?.matches('input, textarea, select')) {
+        e.preventDefault();
+        const searchInput = document.getElementById('hero-search');
+        if (searchInput) searchInput.focus();
+      }
+    });
+    window.popularityData = {};
+    window.gamesLoaded = false;
+    window.appsLoaded = false;
+    window.gamesLoading = false;
+    window.appsLoading = false;
+    window.rawGames = [];
+    window.rawApps = [];
+    let popularityPromise = null;
+    async function readResponseText(response, maximumBytes) {
+      const declared = Number(response.headers?.get('content-length'));
+      if (declared > maximumBytes) throw new Error('This download exceeds the size limit.');
+      if (!response.body?.getReader) {
+        const text = await response.text();
+        if (new TextEncoder().encode(text).length > maximumBytes) throw new Error('This download exceeds the size limit.');
+        return text;
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let total = 0;
+      let result = '';
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          total += value.byteLength;
+          if (total > maximumBytes) throw new Error('This download exceeds the size limit.');
+          result += decoder.decode(value, { stream: true });
+        }
+        return result + decoder.decode();
+      } catch (error) {
+        await reader.cancel().catch(() => {});
+        throw error;
+      } finally { reader.releaseLock(); }
+    }
+    async function fetchCatalog(url) {
+      const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      if (!response.ok) throw new Error(`Catalog request failed (${response.status}).`);
+      return JSON.parse(await readResponseText(response, 4 * 1024 * 1024));
+    }
+    function catalogEntries(value) {
+      const entries = Array.isArray(value) ? value : value && typeof value === 'object' ? Object.values(value) : [];
+      return entries.slice(0, 10000).filter(item => item && typeof item === 'object' && !Array.isArray(item)).map(item => ({
+        ...item,
+        name: String(item.name || item.title || 'Untitled').slice(0, 200),
+        author: String(item.author || '').slice(0, 200),
+        url: String(item.url || item.file || item.path || '').slice(0, 4096),
+        cover: String(item.cover || item.image || '').slice(0, 4096)
+      }));
+    }
+    function fetchPopularity() {
+      if (popularityPromise) return popularityPromise;
+      popularityPromise = fetchCatalog("https://data.jsdelivr.com/v1/stats/packages/gh/freebuisness/html@main/files?period=year").then(data => {
+        if (Array.isArray(data)) {
+          data.forEach(file => {
+            const idMatch = typeof file?.name === 'string' ? file.name.match(/\/(\d+)\.html$/) : null;
+            if (idMatch) {
+              const id = parseInt(idMatch[1], 10);
+              window.popularityData[id] = file.hits ? file.hits.total : 0;
+            }
+          });
+        }
+      }).catch(() => {
+        window.popularityData[0] = 0;
+      });
+      return popularityPromise;
+    }
+    function getGameId(game) {
+      if (game.id !== undefined) return parseInt(game.id, 10);
+      const urlStr = game.url || game.file || game.path || '';
+      const match = urlStr.match(/(\d+)\.html/);
+      return match ? parseInt(match[1], 10) : null;
+    }
+    async function openMusicPopover(button) {
+      if (button) button.disabled = true;
+      try {
+        closeGamesPopover();
+        closeAppsPopover();
+        closeSettingsModal();
+        const { mountMusicCatalog } = await import('/browser-tools/music-catalog.js');
+        await mountMusicCatalog(window, document).open();
+      } catch {
+        if (button) button.title = 'Music could not load. Click to retry.';
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+    function openGamesPopover() {
+      closeAppsPopover();
+      const popover = document.getElementById('games-popover');
+      if (popover) popover.classList.add('active');
+      if (window.MonkehGames) window.MonkehGames.open();
+      else document.getElementById('game-list').textContent = 'The catalog is starting. Reopen Games in a moment.';
+    }
+    function closeGamesPopover() {
+      const popover = document.getElementById('games-popover');
+      if (popover) popover.classList.remove('active');
+    }
+    function openAppsPopover() {
+      closeGamesPopover();
+      const popover = document.getElementById('apps-popover');
+      if (popover) popover.classList.add('active');
+      if (!window.appsLoaded && !window.appsLoading) {
+        window.appsLoading = true;
+        window.renderApps = function () {
+          const searchInput = document.getElementById('apps-search-input');
+          const sortSelect = document.getElementById('apps-sort-select');
+          const q = searchInput ? searchInput.value.toLowerCase().trim() : '';
+          const s = sortSelect ? sortSelect.value : 'pop';
+          const f = window.rawApps.filter(g =>
+            (g.name || g.title || '').toLowerCase().includes(q) ||
+            (g.author || '').toLowerCase().includes(q)
+          );
+          if (s === 'pop') {
+            f.sort((a, b) => {
+              const idA = getGameId(a);
+              const idB = getGameId(b);
+              const popA = idA !== null && window.popularityData[idA] !== undefined ? window.popularityData[idA] : (a.popularity || 0);
+              const popB = idB !== null && window.popularityData[idB] !== undefined ? window.popularityData[idB] : (b.popularity || 0);
+              return popB - popA;
+            });
+          } else if (s === 'az') {
+            f.sort((a, b) => (a.name || a.title || '').localeCompare(b.name || b.title || ''));
+          } else if (s === 'za') {
+            f.sort((a, b) => (b.name || b.title || '').localeCompare(a.name || a.title || ''));
+          }
+          const c = document.getElementById('apps-list');
+          if (!c) return;
+          if (!f.length) {
+            c.innerHTML = '<div class="loading-text">No apps found.</div>';
+            return;
+          }
+          const fg = document.createDocumentFragment();
+          f.forEach(g => {
+            const t = g.name || g.title || 'Untitled';
+            const a = g.author || '';
+            let u = (g.url || g.file || g.path || '').replace('{HTML_URL}', 'https://cdn.jsdelivr.net/gh/securlycdn/html@main');
+            const v = (g.cover || g.image || '').replace('{COVER_URL}', 'https://cdn.jsdelivr.net/gh/securlycdn/covers@main');
+            if (u && !u.startsWith('http') && !u.startsWith('/')) {
+              u = 'https://cdn.jsdelivr.net/gh/securlycdn/html@main/' + u;
+            }
+            const d = document.createElement('button');
+            d.type = 'button';
+            d.className = 'game-item';
+            d.onclick = () => openViewer(t, a, u, false);
+            d.innerHTML = `
+              ${v && window.MonkehPrivacy?.get().showCovers !== false ? `<img class="game-cover" src="${escapeHtml(v)}" alt="${escapeHtml(t)}" loading="lazy" onerror="this.style.display='none'">` : ''}
+              <div class="game-info">
+                <span class="game-title">${escapeHtml(t)}</span>
+                ${a ? `<span class="game-author">${escapeHtml(a)}</span>` : ''}
+              </div>
+            `;
+            fg.appendChild(d);
+          });
+          c.innerHTML = '';
+          c.appendChild(fg);
+        };
+        const defaultAppList = [
+          { name: 'Mochii Cloud', author: 'Cloud gaming library', url: '/apps/mochii-cloud.html', cover: '' },
+          { name: 'Flyflix', author: 'Flyflix', url: 'https://flyflix.net/', cover: '' },
+          { name: 'Voxiles', author: 'bog', url: '/apps/vox.html', cover: '' },
+          { name: 'Auk', author: '', url: '/apps/auk.html', cover: '' },
+          { name: 'Desktops', author: 'Browser desktops', url: '/apps/desktop.html', cover: '' }
+        ];
+        window.rawApps = defaultAppList;
+        window.renderApps();
+        fetchCatalog('https://cdn.jsdelivr.net/gh/securlycdn/assets/apps.json').then(fetchedApps => {
+          const l = catalogEntries(fetchedApps);
+          window.rawApps = [...defaultAppList, ...l];
+          window.renderApps();
+          window.appsLoaded = true;
+        }).catch(() => {
+          window.rawApps = defaultAppList;
+          window.renderApps();
+          window.appsLoaded = true;
+        }).finally(() => {
+          window.appsLoading = false;
+        });
+        fetchPopularity().then(() => {
+          if (window.appsLoaded) window.renderApps();
+        });
+      }
+    }
+    function closeAppsPopover() {
+      const popover = document.getElementById('apps-popover');
+      if (popover) popover.classList.remove('active');
+    }
+    function openSettingsModal() {
+      const modal = document.getElementById('settings-modal');
+      if (modal) modal.classList.add('active');
+    }
+    function closeSettingsModal() {
+      const modal = document.getElementById('settings-modal');
+      if (modal) modal.classList.remove('active');
+    }
+    let viewerNavigation = 0;
+    let viewerRequest = null;
+    let viewerTarget = null;
+    let viewerHasContent = false;
+    function showViewerProgress(message, failed = false) {
+      document.getElementById('viewer-progress-text').textContent = message;
+      document.getElementById('viewer-progress-retry').hidden = !failed;
+      document.getElementById('viewer-progress').hidden = !message;
+    }
+    function showViewerMessage(message) {
+      const frame = document.getElementById('viewer-frame');
+      frame.removeAttribute('sandbox');
+      frame.srcdoc = `<!doctype html><html data-monkeh-placeholder><body style="background:#111;color:#eee;font-family:sans-serif;display:grid;place-items:center;min-height:90vh;margin:0;padding:24px;text-align:center"><p>${escapeHtml(message)}</p></body></html>`;
+    }
+    async function openViewer(title, author, url, isProxied = false, options = {}) {
+      try { const target = new URL(url, window.location.href); if (/^https?:$/.test(target.protocol) && target.origin !== window.location.origin) isProxied = true; } catch {}
+      const previousIsProxied = viewerIsProxied;
+      const canReuseProxy = isProxied && viewerIsProxied;
+      const loadCode = isProxied && options.loadCode === true;
+      viewerTarget = { title, author, url, isProxied, loadCode };
+      viewerIsProxied = isProxied;
+      lastEndpoint = null;
+      if (!isProxied && window.MonkehProxyOrigin) updateStatus('Browser ready', '#22c55e');
+      document.getElementById('network-notice').hidden = true;
+      const navigation = ++viewerNavigation;
+      if (viewerRequest) viewerRequest.abort();
+      viewerRequest = null;
+      closeGamesPopover();
+      closeAppsPopover();
+      
+      const viewer = document.getElementById('zone-viewer');
+      const frame = document.getElementById('viewer-frame');
+      document.getElementById('viewer-title').textContent = title;
+      document.getElementById('viewer-author').textContent = author ? 'by ' + author : '';
+      viewer.classList.add('active');
+      showViewerProgress(isProxied ? 'Connecting to the proxy…' : 'Opening page…');
+      try {
+        if (!url) throw new Error('This catalog entry has no playable URL.');
+        const target = new URL(url, window.location.href);
+        if (!/^https?:$/.test(target.protocol)) throw new Error('Only HTTP and HTTPS pages can be opened.');
+        if (target.username || target.password) throw new Error('Addresses containing login details cannot be opened.');
+        if (isProxied) {
+          if (target.origin === window.location.origin) throw new Error('App pages cannot be opened as proxy destinations.');
+          if (target.protocol === 'http:' && window.MonkehPrivacy?.get().httpsOnly !== false) throw new Error('HTTPS is required for entered addresses. Change this in Settings to open an HTTP page.');
+          const sandbox = window.MonkehPrivacy?.sandbox(true) || 'allow-scripts allow-same-origin allow-forms allow-pointer-lock';
+          const currentHost = new URL(frame.src || 'about:blank', location.href);
+          const currentIdentity = currentHost.searchParams.get('ua') || '';
+          if (canReuseProxy && (currentHost.searchParams.get('loadCode') === '1') === loadCode && currentIdentity === (window.MonkehPrivacy?.get().userAgent || '') && frame.getAttribute?.('sandbox') === sandbox) {
+            const reused = await window.MonkehTools?.navigateRemote?.(target.href);
+            if (navigation !== viewerNavigation) return;
+            if (reused) { showViewerProgress(''); return; }
+          }
+        }
+        if (isProxied) {
+          const ready = await initializeNetwork();
+          if (navigation !== viewerNavigation) return;
+          if (!ready) throw new Error(networkErrorMessage);
+          window.MonkehTools?.prepareNavigation(url, true);
+          window.MonkehTools?.expectDocument(target.href, true);
+          frame.removeAttribute('srcdoc');
+                                                                                
+                                                                            
+          frame.setAttribute('sandbox', window.MonkehPrivacy?.sandbox(true) || 'allow-scripts allow-same-origin allow-forms allow-pointer-lock');
+          const hostUrl = new URL('/proxy-host.html', window.MonkehProxyOrigin);
+          if (loadCode) hostUrl.searchParams.set('loadCode', '1');
+          const userAgent = window.MonkehPrivacy?.get().userAgent || '';
+          if (typeof userAgent === 'string' && userAgent.length <= 512 && /^[\x20-\x7e]+$/.test(userAgent)) hostUrl.searchParams.set('ua', userAgent.trim());
+          hostUrl.hash = encodeURIComponent(target.href);
+          frame.src = hostUrl.href;
+        } else if (target.origin === window.location.origin) {
+          if (!['/apps/auk.html', '/apps/vox.html', '/apps/desktop.html', '/apps/mochii-cloud.html', '/flyflix.html'].includes(target.pathname)) throw new Error('This local app is not in the trusted app list.');
+                                                                                    
+          window.MonkehTools?.prepareNavigation(url, false);
+          window.MonkehTools?.expectDocument(target.href, false);
+          frame.removeAttribute('srcdoc');
+          frame.removeAttribute('sandbox');
+          frame.src = target.href;
+        } else {
+          throw new Error('External pages must open through the proxy.');
+        }
+        viewerHasContent = true;
+        showViewerProgress('');
+      } catch (error) {
+        if (navigation !== viewerNavigation || error.name === 'AbortError') return;
+        const message = `Unable to load this page: ${error.message}`;
+        if (viewerHasContent) {
+                                                                            
+                                                                              
+          viewerIsProxied = previousIsProxied;
+          showViewerProgress(message, true);
+        } else {
+          window.MonkehTools?.prepareNavigation(url, isProxied);
+          frame.src = 'about:blank';
+          showViewerMessage(message);
+          showViewerProgress('');
+        }
+      } finally {
+        if (navigation === viewerNavigation) viewerRequest = null;
+      }
+    }
+    function retryViewerNavigation() {
+      if (!viewerTarget) return;
+      const { title, author, url, isProxied, loadCode } = viewerTarget;
+      return openViewer(title, author, url, isProxied, { loadCode });
+    }
+    function closeViewer() {
+      viewerTarget = null;
+      viewerHasContent = false;
+      showViewerProgress('');
+      viewerIsProxied = false;
+      lastEndpoint = null;
+      if (window.MonkehProxyOrigin) updateStatus('Browser ready', '#22c55e');
+      ++viewerNavigation;
+      if (viewerRequest) viewerRequest.abort();
+      viewerRequest = null;
+      window.MonkehTools?.closeViewer();
+      const viewer = document.getElementById('zone-viewer');
+      const frame = document.getElementById('viewer-frame');
+      if (viewer) viewer.classList.remove('active');
+      if (frame) {
+        frame.removeAttribute('srcdoc');
+        frame.src = 'about:blank';
+      }
+    }
+    function toggleViewerFullscreen() {
+      const frame = document.getElementById('zone-viewer');
+      if (!document.fullscreenElement) {
+        if (frame.requestFullscreen) {
+          frame.requestFullscreen();
+        } else if (frame.webkitRequestFullscreen) {
+          frame.webkitRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+      initializeNetwork(); 
+      const heroSearch = document.getElementById('hero-search');
+      if (heroSearch) {
+        heroSearch.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            handleHeroSearch(heroSearch.value);
+          }
+        });
+      }
+    });
+  </script>
+
+  <!-- Securly cleanup – runs immediately + every 500 ms -->
+  <script>
+    (function () {
+      const cleanup = (doc) => {
+        try {
+          doc.querySelectorAll(
+            '[id^="securly"],[class^="securly"],#securly-overlay,.securly-ui-container'
+          ).forEach(el => el.remove());
+
+          const bodyStyle = doc.body.style;
+          const htmlStyle = doc.documentElement.style;
+
+          bodyStyle.setProperty('overflow', 'auto', 'important');
+          bodyStyle.setProperty('position', 'static', 'important');
+          htmlStyle.setProperty('overflow', 'auto', 'important');
+        } catch (e) {
+          // ignore inaccessible documents
+        }
+      };
+
+      const run = () => {
+        cleanup(document);
+
+        document.querySelectorAll('iframe, frame').forEach(frame => {
+          try {
+            const frameDoc = frame.contentDocument || frame.contentWindow.document;
+            if (frameDoc) cleanup(frameDoc);
+          } catch (e) {
+            // cross-origin or sandboxed → ignore
+          }
+        });
+      };
+
+      run();
+      setInterval(run, 500);
+    })();
+  </script>
+
+<script type="module" src="/browser-tools/mirror-report.js"></script>
+</body>
+</html>

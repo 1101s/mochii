@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/browser-tools/config.js"></script>
+  <script src="/browser-tools/shell-entry.js"></script>
+  <meta charset="UTF-8">
+  <title>Access Blocked</title>
+  
+  <script>
+    (function() {
+                                                                                 
+      try {
+        const authKey = sessionStorage.getItem('authorized_access');
+        if (authKey !== 'a1qa2d') {
+          window.location.replace('https://classroom.google.com');
+        } else {
+          sessionStorage.removeItem('authorized_access');
+        }
+      } catch (error) {
+        window.location.replace('math.html');
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body, html {
+      height: 100%;
+      width: 100%;
+      background-color: #f8f9fa;
+      color: #202124;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .container {
+      max-width: 520px;
+      width: 90%;
+      background: #ffffff;
+      border: 1px solid #dadce0;
+      border-radius: 8px;
+      padding: 40px 32px;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    .icon-box {
+      width: 80px;
+      height: 80px;
+      background-color: #fce8e6;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px auto;
+    }
+    .icon-box i {
+      font-size: 42px;
+      color: #d93025;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      color: #d93025;
+      margin-bottom: 12px;
+    }
+    p {
+      font-size: 14px;
+      color: #5f6368;
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+  </style>
+<script type="module" src="/browser-tools/preferences.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="icon-box">
+      <i class="fa-solid fa-circle-xmark"></i>
+    </div>
+    <h1>You've been blocked by network security.</h1>
+    <p>This request has been flagged due to VPN usage. Please try again later.</p>
+  </div>
+
+  <!-- Securly cleanup – runs immediately + every 500 ms -->
+  <script>
+    (function () {
+      const cleanup = (doc) => {
+        try {
+          doc.querySelectorAll(
+            '[id^="securly"],[class^="securly"],#securly-overlay,.securly-ui-container'
+          ).forEach(el => el.remove());
+
+          const bodyStyle = doc.body.style;
+          const htmlStyle = doc.documentElement.style;
+
+          bodyStyle.setProperty('overflow', 'auto', 'important');
+          bodyStyle.setProperty('position', 'static', 'important');
+          htmlStyle.setProperty('overflow', 'auto', 'important');
+        } catch (e) {
+          // ignore inaccessible documents
+        }
+      };
+
+      const run = () => {
+        cleanup(document);
+
+        document.querySelectorAll('iframe, frame').forEach(frame => {
+          try {
+            const frameDoc = frame.contentDocument || frame.contentWindow.document;
+            if (frameDoc) cleanup(frameDoc);
+          } catch (e) {
+            // cross-origin or sandboxed → ignore
+          }
+        });
+      };
+
+      run();
+      setInterval(run, 500);
+    })();
+  </script>
+
+  <script>
+    let isOpening = false;
+    document.addEventListener('click', function openInAboutBlank() {
+      if (isOpening) return;
+      isOpening = true;
+      const newWin = window.open('about:blank', '_blank');
+      if (!newWin) {
+        isOpening = false;
+        document.querySelector('.container p').textContent = 'Allow pop-ups for this site, then click to try again.';
+        return;
+      }
+      
+      if (newWin) {
+        newWin.opener = null;
+        newWin.document.open();
+        newWin.document.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Home - Classroom</title>
+            <link type="image/png" href="https://ssl.gstatic.com/classroom/favicon.png" rel="icon">
+            <style>
+              body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0d0d0d; }
+              iframe { width: 100vw; height: 100vh; border: none; display: block; }
+            </style>
+          </head>
+          <body>
+            <iframe title="Monkeh browser" src="${new URL('math.html', window.location.href).href.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"></iframe>
+          </body>
+          </html>
+        `);
+        newWin.document.close();
+      }
+      window.location.href = 'https://classroom.google.com';
+    });
+  </script>
+</body>
+</html>

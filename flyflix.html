@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Flyflix · Monkeh</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;color:#eee;background:#111}
+    *{box-sizing:border-box}html,body{margin:0;height:100%}body{display:flex;flex-direction:column}
+    header{display:flex;align-items:center;gap:12px;padding:6px 12px;border-bottom:1px solid #333;background:#181818}
+    strong{letter-spacing:-.03em;font-size:16px}p{margin:0;flex:1;color:#b4b4bf;font-size:12px;line-height:1.5}
+    button{color:#eee;border:1px solid #454550;border-radius:6px;padding:5px 10px;background:#25252d;font:inherit;font-size:12px;cursor:pointer}
+    iframe{width:100%;flex:1;min-height:0;border:0;background:#090909}button:hover{background:#363641}
+  </style>
+<script type="module" src="/browser-tools/preferences.js"></script>
+</head>
+<body>
+  <header>
+    <strong>Flyflix</strong>
+    <p id="status" role="status">Opening flyflix.net through the proxy…</p>
+    <button id="retry" type="button">Reload</button>
+  </header>
+  <iframe id="provider" title="Flyflix through Monkeh" sandbox="allow-scripts allow-same-origin allow-forms allow-pointer-lock allow-presentation" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" referrerpolicy="no-referrer"></iframe>
+  <script src="/browser-tools/config.js"></script>
+  <script src="/browser-tools/shell-entry.js"></script>
+  <script>
+    const frame = document.getElementById('provider');
+    const status = document.getElementById('status');
+    let generation = 0;
+    let request;
+    let channel;
+    let providerOrigin = '';
+    function validateProviderOrigin(value, currentSite = false) {
+      const origin = new URL(value);
+      const local = location.protocol === 'http:' && origin.protocol === 'http:' && origin.hostname === location.hostname && ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname);
+      if (origin.protocol !== 'https:' && !local || origin.username || origin.password || origin.origin !== value || (currentSite ? origin.origin !== location.origin : origin.origin === location.origin)) {
+        throw new Error('Flyflix requires a separate configured proxy origin.');
+      }
+      return origin.origin;
+    }
+    async function loadProvider() {
+      const current = ++generation;
+      request?.abort();
+      channel?.port1.close();
+      channel = null;
+      const pending = request = new AbortController();
+      status.textContent = 'Opening flyflix.net through the proxy…';
+      try {
+        const config = await globalThis.MonkehConfig.fetchConfig({ signal: AbortSignal.any([pending.signal, AbortSignal.timeout(10000)]) });
+        const currentSite = config.mode === 'static';
+        const origin = validateProviderOrigin(currentSite ? location.origin : config.proxyOrigin, currentSite);
+        if (!currentSite && (!Array.isArray(config.shellOrigins) || !config.shellOrigins.includes(location.origin))) throw new Error('This Flyflix app origin is not configured.');
+        if (current !== generation || pending.signal.aborted) return;
+        providerOrigin = origin;
+        const hostUrl = new URL('/proxy-host.html', origin);
+        const userAgent = window.MonkehPrivacy?.get().userAgent || '';
+        if (typeof userAgent === 'string' && userAgent.length <= 512 && /^[\x20-\x7e]+$/.test(userAgent)) hostUrl.searchParams.set('ua', userAgent.trim());
+        hostUrl.hash = encodeURIComponent('https://flyflix.net/');
+        frame.src = hostUrl.href;
+      } catch (error) {
+        if (current === generation && !pending.signal.aborted) status.textContent = String(error.message || 'Flyflix could not start.');
+      }
+    }
+    window.addEventListener('message', event => {
+      if (!event.isTrusted || event.source !== frame.contentWindow || event.origin !== providerOrigin || event.data?.type !== 'monkeh-proxy:ready') return;
+      channel?.port1.close();
+      const current = generation;
+      const connection = channel = new MessageChannel();
+      connection.port1.onmessage = ({ data }) => {
+        if (current !== generation || channel !== connection) return;
+        if (data?.event === 'page') status.textContent = data.data?.isError ? 'Flyflix could not load. Use the proxy retry controls below.' : 'flyflix.net · Connected through Monkeh';
+        else if (data?.event === 'pagehide') status.textContent = 'Loading the next page…';
+      };
+      connection.port1.start();
+      frame.contentWindow.postMessage({ type: 'monkeh-proxy:init' }, providerOrigin, [connection.port2]);
+    });
+    document.getElementById('retry').addEventListener('click', loadProvider);
+    window.addEventListener('pagehide', () => { generation++; request?.abort(); channel?.port1.close(); });
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { void loadProvider(); }, { once: true });
+    else void loadProvider();
+  </script>
+</body>
+</html>

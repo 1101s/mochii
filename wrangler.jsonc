@@ -1,0 +1,24 @@
+{
+  "name": "monkeh",
+  "compatibility_date": "2026-10-03",
+  "main": "workers/app.mjs",
+  "ai": { "binding": "AI" },
+  "vars": {
+    "ENABLE_ASSIST": "true",
+    "ASSIST_ALLOWED_ORIGINS": "[\"https://testingproductionubgdontgo.pages.dev\",\"https://monkeh-noseygames.netlify.app\",\"https://monkeh-browser.robert360254.chatgpt.site\"]"
+  },
+  "ratelimits": [
+    { "name": "ASSIST_RATE", "namespace_id": "106031", "simple": { "limit": 3, "period": 60 } },
+    { "name": "ASSIST_GLOBAL_RATE", "namespace_id": "106032", "simple": { "limit": 10, "period": 60 } },
+    { "name": "MUSIC_RATE", "namespace_id": "106035", "simple": { "limit": 120, "period": 60 } }
+  ],
+  "build": {
+    "command": "node scripts/build-static.mjs"
+  },
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./dist",
+    "run_worker_first": ["/api/*", "/wisp", "/wisp/*"],
+    "not_found_handling": "404-page"
+  }
+}

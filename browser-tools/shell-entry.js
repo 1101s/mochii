@@ -1,0 +1,2 @@
+                                                                             
+globalThis.MonkehConfig.redirectShell();

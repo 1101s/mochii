@@ -1,5 +1,9 @@
 import { attachRuntime, formatValue } from '../browser-tools/runtime.js';
 import { httpUrl } from './protocol.js';
+import { createRequestQueue } from './request-queue.js';
+import { hideServiceWorker } from './sandbox-compat.js';
+
+hideServiceWorker(navigator);
 
 const { token, address, base } = globalThis.__mochiiPage;
 delete globalThis.__mochiiPage;
@@ -10,14 +14,14 @@ let currentAddress = address;
 const nativeSet = Element.prototype.setAttribute;
 const send = data => port ? port.postMessage(data) : waiting.push(data);
 const emit = (event, data) => send({ event, data });
+const enqueue = createRequestQueue();
 function request(method, params = {}) {
-  if (pending.size >= 64) return Promise.reject(new Error('Too many pending page requests.'));
-  return new Promise((resolve, reject) => {
+  return enqueue(() => new Promise((resolve, reject) => {
     const id = ++serial;
     const timer = setTimeout(() => { pending.delete(id); reject(new Error('Proxy request timed out.')); }, 50000);
     pending.set(id, { resolve, reject, timer });
     send({ request: id, method, params });
-  });
+  }));
 }
 function navigate(url, options = {}) {
   return request('navigate', { url: httpUrl(url, currentAddress), ...options });
@@ -126,7 +130,10 @@ for (const method of ['pushState', 'replaceState']) history[method] = (_state, _
 // Delay dynamic resources until a blob fetched through the host is available.
 const rewrites = new WeakMap();
 function resourceAttribute(node, attr, value) {
-  if (typeof value !== 'string' || /^(?:blob:|data:|#)/i.test(value)) return false;
+  if (typeof value !== 'string' || !value.trim() || /^(?:blob:|data:|#)/i.test(value)) {
+    rewrites.delete(node);
+    return false;
+  }
   const tag = node.localName;
   const kind = tag === 'script' && attr === 'src' ? 'script' : tag === 'link' && attr === 'href' ? 'css' : ['img', 'audio', 'video', 'source', 'track', 'input'].includes(tag) && ['src', 'poster'].includes(attr) ? 'asset' : null;
   if (!kind) return false;

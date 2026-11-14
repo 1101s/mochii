@@ -16,6 +16,8 @@ The app creates a dedicated Web Worker (not a Service Worker) containing the tra
 
 The parent fetches each document, follows bounded redirects, rewrites stylesheets and static resource URLs into data URLs, and injects a message-channel bridge. The document runs in an opaque sandbox without `allow-same-origin`, so it cannot read the app's storage or DOM. Links and forms return to the parent navigator. The bridge proxies `fetch`, asynchronous XHR, and common dynamically assigned resource URLs. Existing Console, Inspect, and manually invoked Userscripts work through the message channel.
 
+Game asset bursts are queued (24 active bridge calls, up to 512 waiting) rather than rejected by the host's concurrency limit. Service-worker feature detection reports unavailable in the sandbox so optional offline-cache setup does not crash game loops. Relative paths retain their document directory; explicit `/` paths retain their origin root, including broken paths already present in third-party game exports.
+
 No browser cookies or authorization headers are forwarded. Remote cookies are not persisted. Top-level navigation and popups are not granted to remote content. A page's CSP is replaced with the sandbox document's restricted policy; this is a compatibility renderer, not the original site's browser origin or security model.
 
 Navigation and closing a page cancel its pending work and terminate the dedicated transport worker. Epoxy has no effective per-request network abort: a parent request timeout/cancellation closes that worker and rejects sibling requests. An individual remote `fetch` abort rejects its caller immediately; its already-started network operation remains bounded by the host timeout. Media uses a separate bounded transport/cache.

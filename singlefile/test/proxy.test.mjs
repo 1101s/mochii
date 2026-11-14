@@ -65,6 +65,16 @@ test('cyclic CSS imports finish and duplicate assets share their request', async
   const [a, b] = await Promise.all([instance.asset('a.css', 'https://site.test', 'css'), instance.asset('a.css', 'https://site.test', 'css')]);
   assert.equal(a, b); assert.equal(fetched.length, 2);
 });
+test('CDN game directories preserve relative paths and explicit origin-root paths', async () => {
+  const directory = 'https://cdn.jsdelivr.net/gh/owner/games@revision/craftmine/';
+  const { instance, fetched } = resources({
+    [directory + 'runtime.js']: ['/* runtime */', 'text/javascript'],
+    [directory + 'images/player.png']: ['image', 'image/png'],
+    'https://cdn.jsdelivr.net/js/main.js': ['/* root script */', 'text/javascript'],
+  });
+  await instance.document('<html><head><script src="/js/main.js"></script><script src="runtime.js"></script></head><body><img src="images/player.png"></body></html>', directory + 'index.html', 'token');
+  assert.deepEqual(new Set(fetched), new Set([directory + 'runtime.js', directory + 'images/player.png', 'https://cdn.jsdelivr.net/js/main.js']));
+});
 test('aborted page cannot publish additional resource URLs', async () => {
   const { instance, controller } = resources({}); controller.abort();
   assert.throws(() => instance.blob('x', 'text/plain'), { name: 'AbortError' });

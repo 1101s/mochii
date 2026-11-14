@@ -339,13 +339,14 @@ async function connectFrame(force = false) {
   if (!expectingDocument) return;
   try {
     const source = new URL(frame.src, location.href);
-    if (source.protocol === 'about:') return;
-    if (source.origin !== window.MochiiProxyOrigin || source.pathname !== '/proxy-host.html') {
+    const portable = window.MochiiSinglefile?.isPage(frame) === true;
+    if (source.protocol === 'about:' && !portable) return;
+    if (!portable && (source.origin !== window.MochiiProxyOrigin || source.pathname !== '/proxy-host.html')) {
       disconnect();
       setConnection(source.origin === location.origin ? 'Local app · tools paused' : 'Isolated content · tools unavailable');
       return;
     }
-    if (runtime && currentDocument === frame.src && !force) return;
+    if (runtime && currentDocument === frame.src && !force && !portable) return;
     disconnect();
     currentDocument = frame.src;
     currentUrl = publicUrl(expectedUrl);
@@ -711,7 +712,7 @@ window.MochiiTools = window.MonkehTools = {
       destination = new URL(url);
       const source = new URL(frame.src, location.href);
       if (!expectingDocument || !target?.hasHandshake || typeof target.navigate !== 'function' ||
-          source.origin !== window.MochiiProxyOrigin || source.pathname !== '/proxy-host.html' ||
+          (!window.MochiiSinglefile?.isPage(frame) && (source.origin !== window.MochiiProxyOrigin || source.pathname !== '/proxy-host.html')) ||
           !['http:', 'https:'].includes(destination.protocol) || destination.username || destination.password ||
           destination.href.length > 4096 || [location.origin, source.origin].includes(destination.origin)) return false;
     } catch { return false; }

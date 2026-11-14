@@ -321,6 +321,7 @@ export function mountMochii(doc = document, win = window) {
   }
 
   function gameLink(game) {
+    if (win.MochiiSinglefile) return getFigureLaunchUrl(game.id) || 'https://github.com/1101s/mochii';
     const url = new URL(win.location.pathname, win.location.origin);
     url.searchParams.set('game', game.id);
     return url.href;
@@ -407,7 +408,7 @@ export function mountMochii(doc = document, win = window) {
     try {
       const config = await win.MochiiConfig.fetchConfig({ signal: AbortSignal.any([request.signal, AbortSignal.timeout(10000)]) });
       if (request.signal.aborted || generation !== launchGeneration || !player.open) return;
-      const proxyUrl = getFigureProxyUrl(knownGame.id, config, win.location.origin, win.MochiiPrivacy?.get().userAgent);
+      const proxyUrl = win.MochiiSinglefile ? url : getFigureProxyUrl(knownGame.id, config, win.location.origin, win.MochiiPrivacy?.get().userAgent);
       if (!proxyUrl) throw new Error('The proxy is not available for this site.');
       const frame = element('iframe');
       frame.title = `${knownGame.n} · Figure through Mochii`;
@@ -415,8 +416,10 @@ export function mountMochii(doc = document, win = window) {
       frame.setAttribute('allow', 'fullscreen; gamepad; autoplay');
       frame.referrerPolicy = 'no-referrer';
       frame.allowFullscreen = true;
-      frame.src = proxyUrl;
+      if (!win.MochiiSinglefile) frame.src = proxyUrl;
       $('player-container').replaceChildren(frame);
+      if (win.MochiiSinglefile) await win.MochiiSinglefile.load(url, {}, frame);
+      if (request.signal.aborted || generation !== launchGeneration || !player.open) return;
       $('player-hint').textContent = 'Figure handles session setup and its queue inside this player. Session time includes loading. Close the player to return to your library.';
       startSession(knownGame, 'embed');
     } catch (error) {
@@ -429,6 +432,10 @@ export function mountMochii(doc = document, win = window) {
   }
 
   function closePlayer() {
+    if (win.MochiiSinglefile) {
+      const portableFrame = $('player-container').querySelector('iframe');
+      if (portableFrame) win.MochiiSinglefile.closeFrame(portableFrame);
+    }
     launchGeneration++;
     launchRequest?.abort();
     launchRequest = null;

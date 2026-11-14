@@ -574,7 +574,7 @@ async function start() {
                                                                             
         activate: url => {
           const activate = async () => {
-            await transport.setTransport('/bearmux/epoxy/index.mjs?v=2.1.28', [{ wisp: url }]);
+            await transport.setTransport('/bearmux/epoxy/index.mjs?v=2.1.29', [{ wisp: url }]);
             try { sessionStorage.setItem('mochii.proxy.active-wisp', url); } catch {}
           };
           return transportLockFor(window).run(activate);

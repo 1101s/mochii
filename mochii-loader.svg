@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xhtml="http://www.w3.org/1999/xhtml" width="100%" height="100%" viewBox="0 0 1920 1080">
+  <foreignObject id="fo" width="1920" height="1080" x="0" y="0">
+    <xhtml:html style="width:100%;height:100%;margin:0;padding:0;">
+      <xhtml:head><xhtml:style>
+        * { box-sizing:border-box; margin:0; padding:0; }
+        html,body { width:100%; height:100%; overflow:hidden; background:#111; }
+        iframe { position:fixed; inset:0; width:100%; height:100%; border:0; }
+        #status { color:#ddd; font:14px system-ui; padding:24px; }
+      </xhtml:style></xhtml:head>
+      <xhtml:body>
+        <xhtml:p id="status">Loading Mochii…</xhtml:p>
+        <xhtml:iframe id="fm" src="about:blank" title="Mochii" allow="autoplay; fullscreen; gamepad" />
+        <xhtml:script><![CDATA[
+          (() => {
+            function size() {
+              const w = window.innerWidth, h = window.innerHeight;
+              const svg = document.documentElement, fo = document.getElementById('fo');
+              svg.setAttribute('width', w); svg.setAttribute('height', h); svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+              fo.setAttribute('width', w); fo.setAttribute('height', h);
+            }
+            size(); window.addEventListener('resize', size);
+            (async () => {
+              const frame = document.getElementById('fm');
+              try {
+                const url = 'https://cdn.jsdelivr.net/gh/1101s/mochii@main/mochii-singlefile.html';
+                const response = await fetch(url, { signal: AbortSignal.timeout(60000) });
+                if (!response.ok) throw new Error(`Download returned HTTP ${response.status}`);
+                const text = await response.text();
+                if (!/^\s*<!doctype html/i.test(text)) throw new Error('The CDN did not return the Mochii HTML file.');
+                const doc = frame.contentDocument;
+                doc.open(); doc.write(text); doc.close();
+                document.getElementById('status').remove();
+              } catch (error) {
+                frame.style.display = 'none';
+                document.getElementById('status').textContent = 'Mochii could not load: ' + error.message;
+              }
+            })();
+          })();
+        ]]></xhtml:script>
+      </xhtml:body>
+    </xhtml:html>
+  </foreignObject>
+</svg>

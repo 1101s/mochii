@@ -95,12 +95,12 @@ test('lazy initialization coalesces parallel sources and covers, then reuses the
   await proxy.url('https://music.example/later', config);
   assert.equal(calls.filter(([name]) => name === 'register').length, 1);
   assert.equal(calls.filter(([name]) => name === 'network').length, 1);
-  assert.deepEqual(calls.find(([name]) => name === 'set'), ['set', '/bearmux/epoxy/index.mjs?v=2.1.28', [{ wisp: 'wss://wisp.example.test/' }]]);
+  assert.deepEqual(calls.find(([name]) => name === 'set'), ['set', '/bearmux/epoxy/index.mjs?v=2.1.29', [{ wisp: 'wss://wisp.example.test/' }]]);
   assert.equal(calls.filter(([name]) => name === 'dispose').length, 1);
 });
 
 test('music reuses an already configured browser transport without probing or resetting it', async () => {
-  const { win, calls, createNetwork } = fixture({ existing: '/bearmux/epoxy/index.mjs?v=2.1.28' });
+  const { win, calls, createNetwork } = fixture({ existing: '/bearmux/epoxy/index.mjs?v=2.1.29' });
   const proxy = createLocalProxy({ win, createNetwork });
   await proxy.url('https://music.example/a', config);
   assert.equal(calls.some(([name]) => ['set', 'network'].includes(name)), false);

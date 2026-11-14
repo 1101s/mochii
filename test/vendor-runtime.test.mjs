@@ -17,7 +17,7 @@ test('raw static hosting uses the same pinned vendor runtimes as production buil
     const actual = canonical(await readFile(new URL(destination, root), 'utf8'));
     assert.equal(actual === expected, true, destination + ' must match its pinned package runtime');
   }
-  assert.equal(await readFile(new URL('bearmux/LICENSE', root), 'utf8'), await readFile(new URL('node_modules/@mercuryworkshop/bare-mux/LICENSE', root), 'utf8'));
+  assert.equal(canonical(await readFile(new URL('bearmux/LICENSE', root), 'utf8')), canonical(await readFile(new URL('node_modules/@mercuryworkshop/bare-mux/LICENSE', root), 'utf8')));
 });
 
 test('browser and music runtime references bypass old caches using the pinned package versions', async () => {

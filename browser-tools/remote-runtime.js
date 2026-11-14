@@ -30,15 +30,16 @@ function targetUrl(value) {
 }
 
 export function createRemoteRuntime(frame, origin, callbacks = {}, options = {}) {
+  const portable = globalThis.MochiiSinglefile?.isPage(frame) === true;
   const allowed = new URL(origin);
   const source = new URL(frame.src);
-  if (!['http:', 'https:'].includes(allowed.protocol) || allowed.origin !== origin || allowed.username || allowed.password ||
-      source.origin !== origin || source.pathname !== '/proxy-host.html') {
+  if (!portable && (!['http:', 'https:'].includes(allowed.protocol) || allowed.origin !== origin || allowed.username || allowed.password ||
+      source.origin !== origin || source.pathname !== '/proxy-host.html')) {
     throw new Error('The browser tools target is not the configured proxy host.');
   }
   const Channel = options.MessageChannel || globalThis.MessageChannel;
   if (!Channel) throw new Error('This browser does not support isolated browser tools.');
-  const channel = new Channel();
+  const channel = portable ? { port1: globalThis.MochiiSinglefile.connectTools(), port2: {} } : new Channel();
   const port = channel.port1;
   const pending = new Map();
   let nodes = new Map();
@@ -213,7 +214,7 @@ export function createRemoteRuntime(frame, origin, callbacks = {}, options = {})
     channel.port2.close?.();
   }
 
-  try { frame.contentWindow.postMessage({ type: 'monkeh-proxy:init', protocol: 'mochii-proxy' }, origin, [channel.port2]); }
+  try { if (!portable) frame.contentWindow.postMessage({ type: 'monkeh-proxy:init', protocol: 'mochii-proxy' }, origin, [channel.port2]); }
   catch (error) { dispose(); throw error; }
 
   return {

@@ -1,5 +1,12 @@
 # Mochii
 
+## Single-file SVG build
+
+Use [`mochii-loader.svg`](mochii-loader.svg) to load the bundled
+[`mochii-singlefile.html`](mochii-singlefile.html) from jsDelivr. This build uses
+a JavaScript proxy and external Wisp relays without registering a service worker.
+See [setup, compatibility limits, and build instructions](docs/SINGLEFILE.md).
+
 Mochii is a static app with browser proxy assets on the same site as the app.
 Each mirror serves its own HTML, JavaScript, Ultraviolet and service worker;
 the browser connects directly to the public Wisp server list in

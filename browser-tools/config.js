@@ -126,7 +126,7 @@
   async function fetchConfig(options = {}) {
     if (globalThis.MochiiUseBackendConfig === true || globalThis.MonkehUseBackendConfig === true) return fetchBackendConfig(options);
     options.signal?.throwIfAborted();
-    return staticConfig();
+    return staticConfig(globalThis.MochiiSinglefile ? 'https://mochii.invalid' : globalThis.location?.origin);
   }
 
   if (!Object.getOwnPropertyDescriptor(globalThis, 'MonkehProxyOrigin')?.get) {

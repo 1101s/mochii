@@ -91,7 +91,7 @@ export function createLocalProxy({ win = window, doc = win.document, createNetwo
         onStatus: state => { try { win.networkStatusChanged?.(state); } catch {} },
         activate: async url => {
           if (!force && await currentTransport()) return;
-          await transport.setTransport('/bearmux/epoxy/index.mjs?v=2.1.28', [{ wisp: url }]);
+          await transport.setTransport('/bearmux/epoxy/index.mjs?v=2.1.29', [{ wisp: url }]);
           activeEndpoint = url;
           try { win.sessionStorage?.setItem('mochii.proxy.active-wisp', url); } catch {}
         },
@@ -128,6 +128,10 @@ export function createLocalProxy({ win = window, doc = win.document, createNetwo
 }
 
 export function localProxyFor(win = window) {
+  if (win.MochiiSinglefile) return {
+    url: value => win.MochiiSinglefile.mediaURL(value),
+    retry: () => win.MochiiSinglefile.retryMedia(),
+  };
   if (!clients.has(win)) clients.set(win, createLocalProxy({ win }));
   return clients.get(win);
 }

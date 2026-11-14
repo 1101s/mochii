@@ -190,6 +190,9 @@ export function mountPreferences(win = window) {
     if (!popup) { notice('Allow this window to open, then try again.'); return; }
     popup.opener = null;
     const frame = popup.document.createElement('iframe');
+    if (win.MochiiSinglefile) {
+      notice('The single-file app is already portable. Open its SVG loader in a new tab.'); popup.close(); return;
+    }
     frame.src = new URL('/math.html', win.location.origin).href;
     frame.title = 'Mochii'; frame.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0';
     frame.allow = 'autoplay; fullscreen; gamepad'; frame.allowFullscreen = true;
@@ -279,7 +282,7 @@ export function mountPreferences(win = window) {
     button(data, 'Reset preferences', () => { beforeReset = privacy.get(); setPreferences(defaults); undoReset.hidden = false; notice('Preferences reset. You can undo this until you leave this page.'); });
     const undoReset = button(data, 'Undo reset', () => { if (beforeReset) setPreferences(beforeReset); beforeReset = null; undoReset.hidden = true; }); undoReset.hidden = true;
     const info = section('Information'); const p = doc.createElement('p'); p.className = 'setting-desc'; p.textContent = 'Game catalogs preserve their source credits. Games run from their source hosts through Mochii. Favorites, recent games and settings stay in this browser; there is no account sync.'; info.append(p);
-    const legal = doc.createElement('a'); legal.href = '/licenses/index.html'; legal.textContent = 'Licenses and source'; legal.target = '_blank'; legal.rel = 'noopener noreferrer'; info.append(legal);
+    const legal = doc.createElement('a'); legal.href = win.MochiiSinglefile ? 'https://github.com/1101s/mochii/blob/main/docs/SINGLEFILE.md' : '/licenses/index.html'; legal.textContent = 'Licenses and source'; legal.target = '_blank'; legal.rel = 'noopener noreferrer'; info.append(legal);
     const empty = doc.createElement('p'); empty.className = 'setting-desc'; empty.id = 'settings-empty'; empty.textContent = 'No settings match your search.'; empty.hidden = true; settingsRoot.append(empty);
     const searchable = value => value.toLocaleLowerCase().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
     for (const { body } of groups) {

@@ -333,6 +333,12 @@
       return initializeNetwork();
     }
     function initializeNetwork() {
+      if (window.MochiiSinglefile) {
+        window.MochiiProxyOrigin = 'https://mochii.invalid';
+        updateStatus('Single-file browser ready', '#22c55e');
+        document.getElementById('network-detail').textContent = 'JavaScript proxy · connects through Wisp when you open a page';
+        return Promise.resolve(true);
+      }
       if (networkPromise) return networkPromise;
       if (window.MochiiProxyOrigin) return Promise.resolve(true);
       networkErrorMessage = '';
@@ -665,6 +671,21 @@
       showViewerProgress(isProxied ? 'Connecting to the proxy…' : 'Opening page…');
       try {
         if (!url) throw new Error('This catalog entry has no playable URL.');
+        if (window.MochiiSinglefile) {
+          const target = new URL(url, 'https://mochii.invalid/');
+          const local = target.origin === 'https://mochii.invalid';
+          viewerIsProxied = !local;
+          window.MochiiTools?.prepareNavigation(target.href, !local);
+          window.MochiiTools?.expectDocument(target.href, !local);
+          if (local) { await window.MochiiSinglefile.openLocal(target.pathname, frame); showViewerProgress(''); }
+          else {
+            if (target.protocol === 'http:' && window.MochiiPrivacy?.get().httpsOnly !== false) throw new Error('HTTPS is required. Change this in Settings to open an HTTP page.');
+            await window.MochiiSinglefile.load(target.href, {}, frame);
+          }
+          if (navigation !== viewerNavigation) return;
+          viewerHasContent = true;
+          return;
+        }
         const target = new URL(url, window.location.href);
         if (!/^https?:$/.test(target.protocol)) throw new Error('Only HTTP and HTTPS pages can be opened.');
         if (target.username || target.password) throw new Error('Addresses containing login details cannot be opened.');
@@ -750,6 +771,7 @@
       document.getElementById('viewer-frame')?.focus?.();
     }
     function closeViewer() {
+      window.MochiiSinglefile?.close();
       viewerTarget = null;
       viewerHasContent = false;
       document.getElementById('resume-viewer').hidden = true;

@@ -12,14 +12,20 @@
   "scripts": {
     "start": "node server.mjs",
     "build": "node scripts/build-static.mjs",
+    "build:singlefile": "node scripts/build-singlefile.mjs",
+    "test:singlefile": "node --test singlefile/test/*.test.mjs",
     "check": "node scripts/check-syntax.mjs",
     "test": "node --test test/*.test.mjs",
     "preview": "node scripts/serve-static.mjs"
   },
   "dependencies": {
     "@mercuryworkshop/bare-mux": "2.1.9",
-    "@mercuryworkshop/epoxy-transport": "2.1.28",
+    "@mercuryworkshop/epoxy-transport": "2.1.29",
     "ipaddr.js": "2.5.0",
     "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "linkedom": "0.18.12"
   }
 }
